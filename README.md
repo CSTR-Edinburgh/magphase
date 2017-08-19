@@ -28,14 +28,8 @@ This will compile SPTK and REAPER automatically for you...and that's it!
 ## III. Instructions:
 Just go to ```/demos```, read the instructions inside the demo scripts, which are very discriptive.
 They should run out of the box by running ```python <demo_script>```.
-We recomend that you play firstly with:
-```
-demo_copy_synthesis_high_res.py
-```
-, and then:
-```
-demo_copy_synthesis_low_dim.py
-```
+
+We recomend that you play firstly with ```demo_copy_synthesis_high_res.py``` , and then ```demo_copy_synthesis_low_dim.py```
 They both perform analysis/synthesis routines.
 
 **NOTE:** Just remember to run the scripts from their locations.
@@ -48,14 +42,8 @@ We provide demo scripts  in ```/demos/run_for_merlin```. Firstly, run the demos 
 
 When working with real data and the Merlin toolkit, follow these steps:
 
-1. Before training, run the scripts (with the paths pointing to your data):
-```
-0_batch_feature_extraction_for_merlin.py
-```
-, and then:
-```
-1_batch_convert_label_state_aligned_to_variable_frame_rate.py
-```
+1. Before training, run the scripts (with the paths pointing to your data): ```0_batch_feature_extraction_for_merlin.py``` , and then ```1_batch_convert_label_state_aligned_to_variable_frame_rate.py```
+
 2. Modify the Merlin config file to use the extracted MagPhase features:
 Use the features mag, real, imag, and lf0 as output parameters for the NN (instead of the defauls: mgc, bap, and lf0).
 
