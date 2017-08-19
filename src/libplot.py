@@ -1,3 +1,6 @@
+"""
+@author: Felipe Espic
+"""
 import matplotlib
 matplotlib.use("Qt4Agg")
 from matplotlib import pyplot as lp
