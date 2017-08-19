@@ -1,7 +1,7 @@
 # MagPhase Vocoder:
 MagPhase Vocoder: Speech analysis/synthesis system intended for TTS that extracts and generates from magnitude and phase spectra as speech features.
 
-More information in http://www.felipeespic.com/magphase/
+More information at http://www.felipeespic.com/magphase/
 
 ## I. License:
 See the LICENCE file for details.
