@@ -2,7 +2,7 @@
 """
 Created on Sun Jul 24 23:16:51 2016
 
-@author: Felipe Espic at CSTR, University of Edinburgh
+@author: Felipe Espic
 """
 
 #==============================================================================
