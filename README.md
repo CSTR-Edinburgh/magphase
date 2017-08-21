@@ -37,7 +37,7 @@ They both perform analysis/synthesis routines.
 Then, you can modify the demo scripts to suit your needs.
 
 
-## IV. Using with the Merling toolkit:
+## IV. Using with the Merlin toolkit:
 We provide demo scripts  in ```/demos/run_for_merlin```. Firstly, run the demos in order to learn how they work, and then you can adapt them to work with the Merlin toolkit and real data.
 
 When working with real data and the Merlin toolkit, follow these steps:
