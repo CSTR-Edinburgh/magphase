@@ -1,5 +1,6 @@
 """
 @author: Felipe Espic
+Personal library for plotting
 """
 import matplotlib
 matplotlib.use("Qt4Agg")
