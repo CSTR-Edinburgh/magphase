@@ -52,5 +52,3 @@ Use the features mag, real, imag, and lf0 as output parameters for the NN (inste
 4. Run all the Merlin steps up to DNNGEN (Do not run WAVGEN).
 
 5. Run the script ```2_batch_wave_generation.py``` to generate the waveforms from the parameters predicted by Merlin (usually stored in ```<experiment_dir>/data/gen/```)
-
-
