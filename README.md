@@ -1,21 +1,20 @@
 # MagPhase Vocoder:
-MagPhase Vocoder: Speech analysis/synthesis system intended for TTS that extracts and generates from magnitude and phase spectra as speech features.
+MagPhase Vocoder: Speech analysis/synthesis system intended for TTS, that extracts magnitude and phase spectra as speech features. Then, a synthesis module is used to generate the waveform from the extracted (or predicted) features.
 
-This software is based on the work presented at Interspeech 2017:
+This software is based on the method described in the paper:
+[F. Espic, C. Valentini-Botinhao, and S. King, “Direct Modelling of Magnitude and Phase Spectra for Statistical Parametric Speech Synthesis,” in Proc. Interspeech, Stockholm, Sweden, August, 2017.](http://www.isca-speech.org/archive/Interspeech_2017/pdfs/1647.PDF)
 
-F. Espic, C. Valentini-Botinhao, and S. King, “Direct Modelling of Magnitude and Phase Spectra for Statistical Parametric Speech Synthesis,” in Proc. Interspeech, Stockholm, Sweden, August, 2017.
+@ Author: [Felipe Espic](http://felipeespic.com)
 
 More information at http://www.felipeespic.com/magphase/
-
-@author: Felipe Espic
 
 ## I. License:
 See the LICENCE file for details.
 
 ## I. Prerequisites:
-- OS: Linux (MacOSx soon)
-- Python 2.7
-- Standard Python packages: numpy, scipy, soundfile, matplotlib
+* OS: Linux (MacOSx comming soon)
+* Python 2.7
+* Standard Python packages: numpy, scipy, soundfile, matplotlib
 
 ## II. Install:
 1. Install Pyhton 2.7 and the packages required using the package manager of your distro or by using the command pip (recomended).
