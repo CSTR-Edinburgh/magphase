@@ -1,5 +1,5 @@
-# MagPhase Vocoder:
-MagPhase Vocoder: Speech analysis/synthesis system intended for TTS, that extracts magnitude and phase spectra as speech features. Then, a synthesis module is used to generate the waveform from the extracted (or predicted) features.
+# MagPhase Vocoder
+Speech analysis/synthesis system for TTS and related applications.
 
 This software is based on the method described in the paper:
 
@@ -9,15 +9,29 @@ This software is based on the method described in the paper:
 
 More information at http://www.felipeespic.com/magphase/
 
-## I. License:
+## I. Description
+This is a speech waveform analysis/synthesis system used in Statistical Parametric Speech Synthesis (SPSS).
+
+The analysis module extracts four feature streams describing magnitude spectra, phase spectra, and F0. These features can be used to train a regression model (e.g., DNN, LSTM, HMM. etc.) so then, predicted values can be generated.
+The synthesis module takes these features at the input to generate the final synthesised waveform.
+
+Key points:
+* Avoids estimation steps as far as possible (no aperiodicities, spectral envelope, or harmonics estimation, etc.)
+* Robust extraction and modelling of phase spectra (Conventional vocoders just create artificial phase at the output).
+* No phase unwrapping required.
+* Uses fast operations during synthesis (e.g., FFT, PSOLA).
+* Remarkably reduces typical "buzziness" and "phasiness".
+* Many other applications and improvements not explored yet.
+
+## II. License:
 See the LICENCE file for details.
 
-## I. Prerequisites:
+## III. Prerequisites:
 * OS: Linux (MacOSx comming soon)
 * Python 2.7
 * Standard Python packages: numpy, scipy, soundfile, matplotlib
 
-## II. Install:
+## IV. Install:
 1. Install Pyhton 2.7 and the packages required using the package manager of your distro or by using the command pip (recomended).
 e.g.,
 ```
@@ -30,8 +44,7 @@ cd tools
 ```
 This will compile SPTK and REAPER automatically for you...and that's it!
 
-
-## III. Instructions:
+## V. Usage:
 Just go to ```/demos```, read the instructions inside the demo scripts, which are very discriptive.
 They should run out of the box by running ```python <demo_script>```.
 
@@ -43,7 +56,7 @@ They both perform analysis/synthesis routines.
 Then, you can modify the demo scripts to suit your needs.
 
 
-## IV. Using with the Merlin toolkit:
+## VI. Using with the Merlin toolkit:
 We provide demo scripts  in ```/demos/run_for_merlin```. Firstly, run the demos in order to learn how they work, and then you can adapt them to work with the Merlin toolkit and real data.
 
 When working with real data and the Merlin toolkit, follow these steps:
