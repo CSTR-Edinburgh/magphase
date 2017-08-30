@@ -51,10 +51,9 @@ They should run out of the box by running ```python <demo_script>```.
 We recomend that you play firstly with ```demo_copy_synthesis_high_res.py``` , and then ```demo_copy_synthesis_low_dim.py```
 They both perform analysis/synthesis routines.
 
-**NOTE:** Just remember to run the scripts from their locations.
-
 Then, you can modify the demo scripts to suit your needs.
 
+**NOTE:** Just remember to run the scripts from their locations.
 
 ## VI. Using with the Merlin toolkit:
 We provide demo scripts  in ```/demos/run_for_merlin```. Firstly, run the demos in order to learn how they work, and then you can adapt them to work with the Merlin toolkit and real data.
