@@ -13,12 +13,30 @@ from subprocess import call
 import soundfile as sf
 import libutils as lu
 from scipy import interpolate
+from ConfigParser import SafeConfigParser
 
-_curr_dir = os.path.dirname(os.path.realpath(__file__))
-_reaper_bin = os.path.realpath(_curr_dir + '/../tools/REAPER/build/reaper')
-_sptk_bin_dir = os.path.realpath(_curr_dir + '/../tools/SPTK-3.9/build/bin')
+# Configuration:
+#_curr_dir = os.path.dirname(os.path.realpath(__file__))
+#_reaper_bin    = os.path.realpath(_curr_dir + '/../tools/REAPER/build/reaper')
+#_sptk_mcep_bin = os.path.realpath(_curr_dir + '/../tools/SPTK-3.9/build/bin/mcep')
 
 MAGIC = -1.0E+10 # logarithm floor (the same as SPTK)
+
+#-------------------------------------------------------------------------------
+def parse_config():
+    global _reaper_bin, _sptk_mcep_bin
+    _curr_dir = os.path.dirname(os.path.realpath(__file__))
+    _reaper_bin    = os.path.realpath(_curr_dir + '/../tools/REAPER/build/reaper')
+    _sptk_mcep_bin = os.path.realpath(_curr_dir + '/../tools/SPTK-3.9/build/bin/mcep')
+    _config = SafeConfigParser()
+    _config.read(_curr_dir + '/../config.ini')
+    #import ipdb; ipdb.set_trace()
+    if not ((_config.get('TOOLS', 'reaper')=='') or (_config.get('TOOLS', 'sptk_mcep')=='')):
+        #import ipdb; ipdb.set_trace()
+        _reaper_bin    = _config.get('TOOLS', 'reaper')
+        _sptk_mcep_bin = _config.get('TOOLS', 'sptk_mcep')
+    return
+parse_config()
 
 #-------------------------------------------------------------------------------
 def gen_mask_simple(v_voi, nbins, cutoff_bin):
@@ -585,7 +603,7 @@ def sp_to_mcep(m_sp, n_coeffs=60, alpha=0.77, in_type=3, fft_len=0):
         fft_len = 2*(np.size(m_sp,1) - 1)
 
     # MCEP:      
-    curr_cmd = _sptk_bin_dir + "/mcep -a %1.2f -m %d -l %d -e 1.0E-8 -j 0 -f 0.0 -q %d %s > %s" % (alpha, n_coeffs-1, fft_len, in_type, temp_sp, temp_mgc)
+    curr_cmd = _sptk_mcep_bin + " -a %1.2f -m %d -l %d -e 1.0E-8 -j 0 -f 0.0 -q %d %s > %s" % (alpha, n_coeffs-1, fft_len, in_type, temp_sp, temp_mgc)
     call(curr_cmd, shell=True)
     
     # Read MGC File:

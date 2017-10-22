@@ -27,7 +27,7 @@ Key points:
 See the LICENCE file for details.
 
 ## III. Prerequisites:
-* OS: Linux (MacOSx comming soon)
+* OS: Linux (MacOSx coming soon)
 * Python 2.7
 * Standard Python packages: numpy, scipy, soundfile, matplotlib
 
@@ -37,12 +37,13 @@ e.g.,
 ```
 sudo pip install numpy scipy soundfile matplotlib
 ```
-2. Download and compile SPTK and REAPER:
+
+2. If you have SPTK and REAPER already installed in your system (e.g. in a Merlin installation), edit the **config.ini** file providing the paths for **reaper** and the SPTK's **mcep** binaries. Otherwise, download and compile SPTK and REAPER by:
 ```
 cd tools
 ./download_and_compile_tools.sh
 ```
-This will compile SPTK and REAPER automatically for you...and that's it!
+This will compile and configure SPTK and REAPER automatically for you...and that's it!
 
 ## V. Usage:
 Just go to ```/demos```, read the instructions inside the demo scripts, which are very discriptive.
