@@ -26,21 +26,11 @@ import libaudio as la
 from libplot import lp
 import magphase as mp
 
-def analysis(wav_file, fft_len, mvf, nbins_mel=60, nbins_phase=45):
-    est_file = lu.ins_pid('temp.est')
-    la.reaper(wav_file, est_file)
-    m_mag_mel_log, m_real_mel, m_imag_mel, v_shift, v_lf0, fs = mp.analysis_with_del_comp__ph_enc__f0_norm__from_files2(wav_file, est_file, fft_len, mvf, f0_type='lf0', mag_mel_nbins=nbins_mel, cmplx_ph_mel_nbins=nbins_phase)
-    os.remove(est_file)
-    return m_mag_mel_log, m_real_mel, m_imag_mel, v_lf0
-
-def synthesis(m_mag_mel_log, m_real_mel, m_imag_mel, v_lf0, fs):
-    v_syn_sig = mp.synthesis_with_del_comp_and_ph_encoding5(m_mag_mel_log, m_real_mel, m_imag_mel, v_lf0, fft_len, fs, mvf, f0_type='lf0')
-    return v_syn_sig
-
 def plots(m_mag_mel_log, m_real_mel, m_imag_mel, v_lf0):
     lp.plotm(m_mag_mel_log)
-    lp.title('Log-Magnitude Spectrum')
+    lp.title(' Mel-scaled Log-Magnitude Spectrum')
     lp.xlabel('Time (frames)')
+
     lp.ylabel('Mel-scaled frequency bins')
 
     lp.plotm(m_real_mel)
@@ -63,32 +53,25 @@ def plots(m_mag_mel_log, m_real_mel, m_imag_mel, v_lf0):
 
 
 if __name__ == '__main__':  
-    # CONSTANTS: So far, the vocoder has been tested only with the following constants:
-    fft_len = 4096
-    fs      = 48000
 
     # INPUT:==============================================================================
-    wav_file_orig = 'data/wavs_nat/hvd_593.wav' # Original natural wave file. You can choose anyone provided in the /wavs_nat directory.
-    out_dir       = 'data/wavs_syn' # Where the synthesised waveform will be stored.
-
+    wav_file_orig = 'data_48k/wavs_nat/hvd_593.wav' # Original natural wave file. You can choose anyone provided in the /wavs_nat directory.
+    out_dir       = 'data_48k/wavs_syn' # Where the synthesised waveform will be stored.
     b_plots       = True # True if you want to plot the extracted parameters.
-    mvf           = 4500 # Maximum voiced frequency (Hz)
-    nbins_mel     = 60   # Number of Mel-scaled frequency bins.
-    nbins_phase   = 45   # Number of Mel-scaled frequency bins kept for phase features (real and imag). It must be <= nbins_mel
 
     # PROCESS:============================================================================
     lu.mkdir(out_dir)
 
     # ANALYSIS:
     print("Analysing.....................................................")
-    m_mag_mel_log, m_real_mel, m_imag_mel, v_lf0 = analysis(wav_file_orig, fft_len, mvf, nbins_mel=nbins_mel, nbins_phase=nbins_phase)
+    m_mag_mel_log, m_real_mel, m_imag_mel, v_lf0, v_shift, fs, fft_len = mp.analysis_compressed(wav_file_orig)
 
     # MODIFICATIONS:
-    # If wanted, you can do modifications to the parameters here.
+    # You can modify the parameters here if wanted.
 
     # SYNTHESIS:
     print("Synthesising.................................................")
-    v_syn_sig = synthesis(m_mag_mel_log, m_real_mel, m_imag_mel, v_lf0, fs)
+    v_syn_sig = mp.synthesis_from_compressed(m_mag_mel_log, m_real_mel, m_imag_mel, v_lf0, fs, fft_len)
 
     # SAVE WAV FILE:
     print("Saving wav file..............................................")
@@ -102,10 +85,5 @@ if __name__ == '__main__':
         lp.close('all')
 
     print('Done!')
-
-
-
-
-
 
 

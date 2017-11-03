@@ -26,62 +26,41 @@ If wanted, you can modify the input options (directories, input files, etc.) See
 import sys, os
 curr_dir = os.getcwd()
 sys.path.append(os.path.realpath(curr_dir + '/../../src'))
-
-import numpy as np
 import libutils as lu
-import libaudio as la
 import magphase as mp
 
-def feat_extraction(in_wav_dir, file_name_token, out_feats_dir, fft_len, mvf, nbins_mel=60, nbins_phase=45):
+
+def feat_extraction(in_wav_dir, file_name_token, out_feats_dir):
 
     # Display:
-    print("Analysing file: " + file_name_token + '.wav')
+    print("\nAnalysing file: " + file_name_token + '.wav............................')
 
-    # Files setup:
-    wav_file = in_wav_dir    + '/' + file_name_token + '.wav'
-    est_file = out_feats_dir + '/' + file_name_token + '.est'
-
-    # Epochs detection:
-    la.reaper(wav_file, est_file)
-
-    # Feature extraction:
-    m_mag_mel_log, m_real_mel, m_imag_mel, v_shift, v_lf0, fs = mp.analysis_with_del_comp__ph_enc__f0_norm__from_files2(wav_file, est_file, fft_len, mvf, f0_type='lf0', mag_mel_nbins=nbins_mel, cmplx_ph_mel_nbins=nbins_phase)
-
-    # Zeros for unvoiced segments in phase features:
-    v_voi = (np.exp(v_lf0) > 5.0).astype(int) # 5.0: tolerance (just in case)
-    m_real_mel_zeros = m_real_mel * v_voi[:,None]
-    m_imag_mel_zeros = m_imag_mel * v_voi[:,None]
-
-    # Saving features:
-    lu.write_binfile(m_mag_mel_log,    out_feats_dir + '/' + file_name_token + '.mag')
-    lu.write_binfile(m_real_mel_zeros, out_feats_dir + '/' + file_name_token + '.real')
-    lu.write_binfile(m_imag_mel_zeros, out_feats_dir + '/' + file_name_token + '.imag')
-    lu.write_binfile(v_lf0,            out_feats_dir + '/' + file_name_token + '.lf0')
-
-    # Saving auxiliary feature shift (hop length). It is useful for posterior modifications of labels in Merlin.
-    lu.write_binfile(v_shift, out_feats_dir + '/' + file_name_token + '.shift')
+    # File setup:
+    wav_file = os.path.join(in_wav_dir, file_name_token + '.wav')
+    mp.analysis_compressed(wav_file, out_dir=out_feats_dir)
 
     return
 
 
 if __name__ == '__main__':  
     
-    # CONSTANTS: So far, the vocoder has been tested only with the following constants:===
-    fft_len = 4096
-    fs      = 48000
-
     # INPUT:==============================================================================
-    files_scp     = '../data/file_id.scp' # List of file names (tokens). Format used by Merlin.
-    in_wav_dir    = '../data/wavs_nat'    # Directory with the wavfiles to extract the features from.
-    out_feats_dir = '../data/params'      # Output directory that will contain the extracted features.
-    mvf           = 4500               # Maximum voiced frequency (Hz)
+    files_scp     = '../data_48k/file_id.scp' # List of file names (tokens). Format used by Merlin.
+    in_wav_dir    = '../data_48k/wavs_nat'    # Directory with the wavfiles to extract the features from.
+    out_feats_dir = '../data_48k/params'      # Output directory that will contain the extracted features.
+
 
     # FILES SETUP:========================================================================
     lu.mkdir(out_feats_dir)
     l_file_tokns = lu.read_text_file2(files_scp, dtype='string', comments='#').tolist()
 
     # MULTIPROCESSING EXTRACTION:==========================================================
-    lu.run_multithreaded(feat_extraction, in_wav_dir, l_file_tokns, out_feats_dir, fft_len, mvf)
-        
+    lu.run_multithreaded(feat_extraction, in_wav_dir, l_file_tokns, out_feats_dir)
+
+    # For debug (Don't remove):
+    #for file_name_token in l_file_tokns:
+    #    feat_extraction(in_wav_dir, file_name_token, out_feats_dir)
+
+
     print('Done!')
         

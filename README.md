@@ -49,7 +49,7 @@ This will compile and configure SPTK and REAPER automatically for you...and that
 Just go to ```/demos```, read the instructions inside the demo scripts, which are very discriptive.
 They should run out of the box by running ```python <demo_script>```.
 
-We recomend that you play firstly with ```demo_copy_synthesis_high_res.py``` , and then ```demo_copy_synthesis_low_dim.py```
+We recomend that you play firstly with ```demo_copy_synthesis_lossless.py``` , and then ```demo_copy_synthesis_low_dim.py```
 They both perform analysis/synthesis routines.
 
 Then, you can modify the demo scripts to suit your needs.
@@ -63,8 +63,16 @@ When working with real data and the Merlin toolkit, follow these steps:
 
 1. Before training, run the scripts (with the paths pointing to your data): ```0_batch_feature_extraction_for_merlin.py``` , and then ```1_batch_convert_label_state_aligned_to_variable_frame_rate.py```
 
-2. Modify the Merlin config file to use the extracted MagPhase features:
-Use the features mag, real, imag, and lf0 as output parameters for the NN (instead of the defauls: mgc, bap, and lf0).
+2. Modify the Merlin config file and ```configure.py``` script to use the extracted MagPhase features:
+Use the features mag, real, imag, and lf0 as output parameters for the NN (instead of the defauls: mgc, bap, and lf0). The dimensions that you need to provide are (at least with the default configuration):
+lf0: 1
+dlf0: 3
+mag: 60
+dmag: 180
+real: 45
+dreal: 135
+imag: 45
+dimag: 135
 
 3. Modify the Merlin config file to use the variable rate label by pointing to the ```/labs_var_rate``` directory.
 

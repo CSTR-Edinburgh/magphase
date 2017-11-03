@@ -31,10 +31,10 @@ if __name__ == '__main__':
     fs = 48000
 
     # INPUT:==============================================================================
-    files_scp      = '../data/file_id.scp'   # List of file names (tokens). Format used by Merlin.
-    in_lab_st_dir  = '../data/labs'          # Original state aligned label files directory (in the format used by Merlin).
-    in_shift_dir   = '../data/params'        # Directory containing .shift files (You need to run feature extraction before running this script.)
-    out_lab_st_dir = '../data/labs_var_rate' # Directory that will contain the converted "variable frame rate" state aligned label files.
+    files_scp      = '../data_48k/file_id.scp'   # List of file names (tokens). Format used by Merlin.
+    in_lab_st_dir  = '../data_48k/labs'          # Original state aligned label files directory (in the format used by Merlin).
+    in_shift_dir   = '../data_48k/params'        # Directory containing .shift files (You need to run feature extraction before running this script.)
+    out_lab_st_dir = '../data_48k/labs_var_rate' # Directory that will contain the converted "variable frame rate" state aligned label files.
     b_prevent_zeros = False                  # True if you want to ensure that all the phonemes have one frame at least. (not recommended, only usful when there are too many utterances crashed)
 
 

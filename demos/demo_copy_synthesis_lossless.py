@@ -16,6 +16,8 @@ INSTRUCTIONS:
 This demo should work out of the box. Just run it by typing: python <script name>
 If wanted, you can modify the input options and/or perform some modification to the
 extracted features before re-synthesis. See the main function below for details.
+
+NOTES: This script was previously named demo_copy_synthesis_hi_res.py
 """
 
 import sys, os
@@ -26,18 +28,6 @@ import libutils as lu
 import libaudio as la
 from libplot import lp
 import magphase as mp
-
-def analysis(wav_file, fft_len):
-    est_file = lu.ins_pid('temp.est')
-    la.reaper(wav_file_orig, est_file)
-    m_mag, m_real, m_imag, v_shift, v_voi, m_frm, fs = mp.analysis_with_del_comp__ph_enc__f0_norm__from_files_raw(wav_file, est_file, fft_len)
-    v_f0 = mp.shift_to_f0(v_shift, v_voi, fs, out='f0', b_smooth=True)
-    os.remove(est_file)
-    return m_mag, m_real, m_imag, v_f0
-
-def synthesis(m_mag, m_real, m_imag, v_f0, fs):
-    v_syn_sig = mp.synthesis_wit_del_comp_from_raw_params(m_mag, m_real, m_imag, v_f0, fs)
-    return v_syn_sig
 
 def plots(m_mag, m_real, m_imag, v_f0):
     lp.plotm(la.db(m_mag)) # in decibels for better visualisation
@@ -65,13 +55,10 @@ def plots(m_mag, m_real, m_imag, v_f0):
 
 
 if __name__ == '__main__':  
-    # CONSTANTS: So far, the vocoder has been tested only with the following constants:
-    fft_len = 4096
-    fs      = 48000
 
     # INPUT:==============================================================================
-    wav_file_orig = 'data/wavs_nat/hvd_577.wav' # Original natural waveform. You can choose any of the provided ones in the /wavs_nat directory.
-    out_dir       = 'data/wavs_syn' # Where the synthesised waveform will be stored
+    wav_file_orig = 'data_48k/wavs_nat/hvd_593.wav' # Original natural waveform. You can choose any of the provided ones in the /wavs_nat directory.
+    out_dir       = 'data_48k/wavs_syn' # Where the synthesised waveform will be stored
 
     b_plots       = True # True if you want to plot the extracted parameters.
 
@@ -80,18 +67,18 @@ if __name__ == '__main__':
 
     # ANALYSIS:
     print("Analysing.....................................................")
-    m_mag, m_real, m_imag, v_f0 = analysis(wav_file_orig, fft_len)
+    m_mag, m_real, m_imag, v_f0, fs, v_shift = mp.analysis_lossless(wav_file_orig)
 
     # MODIFICATIONS:
-    # If wanted, you can do modifications to the parameters here.
+    # You can modify the parameters here if wanted.
 
     # SYNTHESIS:
     print("Synthesising.................................................")
-    v_syn_sig = synthesis(m_mag, m_real, m_imag, v_f0, fs)
+    v_syn_sig = mp.synthesis_from_lossless(m_mag, m_real, m_imag, v_f0, fs)
 
     # SAVE WAV FILE:
     print("Saving wav file..............................................")
-    wav_file_syn = out_dir + '/' + lu.get_filename(wav_file_orig) + '_copy_syn_high_res.wav'
+    wav_file_syn = out_dir + '/' + lu.get_filename(wav_file_orig) + '_copy_syn_lossless.wav'
     la.write_audio_file(wav_file_syn, v_syn_sig, fs)
 
     # PLOTS:===============================================================================

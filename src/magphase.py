@@ -14,6 +14,8 @@ import libaudio as la
 import soundfile as sf
 from scipy import interpolate
 from scipy import signal
+import os
+import warnings
 
 #==============================================================================
 # BODY
@@ -138,7 +140,14 @@ def analysis_with_del_comp_from_est_file_2(v_in_sig, est_file, fs):
 #==============================================================================
 # From (after) 'analysis_with_del_comp':
 # new: returns voi/unv decision.
-def analysis_with_del_comp_from_est_file(v_in_sig, est_file, nFFT, fs, win_func=np.hanning, b_ph_unv_zero=False, nwin_per_pitch_period=0.5):
+def analysis_with_del_comp_from_est_file(v_in_sig, est_file, fs, nFFT=None, win_func=np.hanning, b_ph_unv_zero=False, nwin_per_pitch_period=0.5):
+
+    if nFFT is None: # If fft length is not provided, some standard values are assumed.
+        if fs==48000:
+            nFFT=4096
+        elif fs==16000:
+            nFFT=2048
+
     # Pitch Marks:-------------------------------------------------------------
     v_pm_sec, v_voi = la.read_reaper_est_file(est_file, check_len_smpls=len(v_in_sig), fs=fs)    
     v_pm_smpls = v_pm_sec * fs
@@ -153,7 +162,17 @@ def analysis_with_del_comp_from_est_file(v_in_sig, est_file, nFFT, fs, win_func=
 #==============================================================================
 # From (after) 'analysis_with_del_comp':
 # new: returns voi/unv decision.
-def analysis_with_del_comp_from_pm(v_in_sig, v_pm_smpls, nFFT, win_func=np.hanning, nwin_per_pitch_period=0.5):
+def analysis_with_del_comp_from_pm(v_in_sig, fs, v_pm_smpls, fft_len=None, win_func=np.hanning, nwin_per_pitch_period=0.5):
+
+    # If the FFT length is not provided, some safe values are assumed.
+    # You can try decreasing the fft length if wanted.
+    if fft_len is None:
+        if (fs==22050) or (fs==16000):
+            fft_len = 2048
+        elif (fs==8000):
+            fft_len = 1024
+        else: # TODO: Add warning??
+            fft_len = 4096
 
     # Generate intermediate epocs:
     v_pm_smpls_defi = v_pm_smpls
@@ -175,14 +194,14 @@ def analysis_with_del_comp_from_pm(v_in_sig, v_pm_smpls, nFFT, win_func=np.hanni
     
     # FFT:---------------------------------------------------------------------
     len_max = np.max(v_lens) # max frame length in file    
-    if nFFT < len_max:
-        raise ValueError("nFFT (%d) is shorter than the maximum frame length (%d)" % (nFFT,len_max))
+    if fft_len < len_max:
+        raise ValueError("fft_len (%d) is shorter than the maximum frame length (%d). Please, increase de FFT length." % (fft_len,len_max))
     
     n_frms = len(l_frms)
-    m_frms = np.zeros((n_frms, nFFT))   
+    m_frms = np.zeros((n_frms, fft_len))
     
     # For paper:--------------------------------
-    #m_frms_orig = np.zeros((n_frms, nFFT))  
+    #m_frms_orig = np.zeros((n_frms, fft_len))
     # ------------------------------------------
     
     for f in xrange(n_frms):           
@@ -206,7 +225,7 @@ def analysis_with_del_comp_from_pm(v_in_sig, v_pm_smpls, nFFT, win_func=np.hanni
     m_ph  = la.remove_hermitian_half(m_ph) 
     m_fft = la.remove_hermitian_half(m_fft)
     
-    return m_sp, m_ph, v_shift, m_frms, m_fft
+    return m_fft, v_shift
 
 #==============================================================================
 
@@ -329,17 +348,19 @@ def analysis_with_del_comp__ph_enc__f0_norm__from_files(wav_file, est_file, nFFT
 
     
 #==============================================================================    
-def get_fft_params_from_complex_data(m_fft):
+def compute_lossless_feats(m_fft, v_shift, v_voi, fs):
+
     m_mag  = np.absolute(m_fft) 
     m_real = m_fft.real / m_mag # = p_phc
     m_imag = m_fft.imag / m_mag # = p_phs
-    
-    return m_mag, m_real, m_imag
+    v_f0   = shift_to_f0(v_shift, v_voi, fs, out='f0', b_smooth=False)
+
+    return m_mag, m_real, m_imag, v_f0
 
 
 #=======================================================================================
 
-def analysis_with_del_comp__ph_enc__f0_norm__from_files_raw(wav_file, est_file, nFFT, win_func=np.hanning, nwin_per_pitch_period=0.5):
+def analysis_with_del_comp__ph_enc__f0_norm__from_files_raw(wav_file, est_file, nFFT=None, win_func=np.hanning, nwin_per_pitch_period=0.5):
     '''
     This function does not perform any Mel warping or data compression
     b_double_win: 2 windows per 2 pitch periods.
@@ -347,8 +368,12 @@ def analysis_with_del_comp__ph_enc__f0_norm__from_files_raw(wav_file, est_file, 
     # Read wav file:-----------------------------------------------------------
     v_in_sig, fs = sf.read(wav_file)
 
+    # Check for 16kHz or 48kHz sample rate. TODO: extend to work with any sample rate.
+    if (fs!=48000) or (fs!=16000):
+        raise ValueError('MagPhase works only at 16kHz and 48kHz sample rates, for now. The wavefile\'s sample rate is %d (Hz).\nConsider resampling the data beforehand if wanted.' % (fs))
+
     # Analysis:----------------------------------------------------------------
-    m_sp_dummy, m_ph_dummy, v_shift, v_voi, m_frms, m_fft = analysis_with_del_comp_from_est_file(v_in_sig, est_file, nFFT, fs, win_func=win_func, nwin_per_pitch_period=nwin_per_pitch_period)
+    m_sp_dummy, m_ph_dummy, v_shift, v_voi, m_frms, m_fft = analysis_with_del_comp_from_est_file(v_in_sig, est_file, fs, nFFT=nFFT, win_func=win_func, nwin_per_pitch_period=nwin_per_pitch_period)
 
     # Get fft-params:----------------------------------------------------------
     m_mag, m_real, m_imag = get_fft_params_from_complex_data(m_fft)
@@ -363,17 +388,22 @@ def analysis_with_del_comp__ph_enc__f0_norm__from_files_raw(wav_file, est_file, 
 # After 'analysis_with_del_comp_and_ph_encoding'    
 # new: returns voi/unv decision.
 # This function performs Mel Warping and vector cutting (for phase)
-def analysis_with_del_comp__ph_enc__f0_norm__from_files2(wav_file, est_file, nFFT, mvf, f0_type='f0', win_func=np.hanning, mag_mel_nbins=60, cmplx_ph_mel_nbins=45):
+def analysis_with_del_comp__ph_enc__f0_norm__from_files2(wav_file, est_file, mvf, nFFT=None, f0_type='f0', win_func=np.hanning, mag_mel_nbins=60, cmplx_ph_mel_nbins=45):
 
-    m_mag, m_real, m_imag, v_shift, v_voi, m_frms, fs  = analysis_with_del_comp__ph_enc__f0_norm__from_files_raw(wav_file, est_file, nFFT, win_func=win_func)
-        
+    m_mag, m_real, m_imag, v_shift, v_voi, m_frms, fs  = analysis_with_del_comp__ph_enc__f0_norm__from_files_raw(wav_file, est_file, nFFT=nFFT, win_func=win_func)
+
     # Mel warp:----------------------------------------------------------------
-    m_mag_mel = la.sp_mel_warp(m_mag, mag_mel_nbins, alpha=0.77, in_type=3)
+    if fs==48000:
+        alpha = 0.77
+    elif fs==16000:
+        alpha = 0.58
+
+    m_mag_mel = la.sp_mel_warp(m_mag, mag_mel_nbins, alpha=alpha, in_type=3)
     m_mag_mel_log = np.log(m_mag_mel)
 
     # Phase:-------------------------------------------------------------------
-    m_imag_mel = la.sp_mel_warp(m_imag, mag_mel_nbins, alpha=0.77, in_type=2)
-    m_real_mel = la.sp_mel_warp(m_real, mag_mel_nbins, alpha=0.77, in_type=2)
+    m_imag_mel = la.sp_mel_warp(m_imag, mag_mel_nbins, alpha=alpha, in_type=2)
+    m_real_mel = la.sp_mel_warp(m_real, mag_mel_nbins, alpha=alpha, in_type=2)
 
     # Cutting phase vectors:
     m_imag_mel = m_imag_mel[:,:cmplx_ph_mel_nbins]
@@ -483,17 +513,35 @@ def synthesis_with_del_comp__ph_enc__from_f0(m_spmgc, m_phs, m_phc, v_f0, nFFT, 
 # if v_voi[n] > 0, frame is voiced. If v_voi[n] == 0, frame is unvoiced. 
 # If v_voy=='estim', the mask is estimated from phase data.
 # hf_slope_coeff: 1=no slope, 2=finishing with twice the energy at highest frequency.
-def synthesis_with_del_comp_and_ph_encoding5(m_mag_mel_log, m_real_mel, m_imag_mel, v_f0, nfft, fs, mvf, f0_type='lf0', hf_slope_coeff=1.0, b_use_ap_voi=True, b_voi_ap_win=True):
+#def synthesis_with_del_comp_and_ph_encoding5(m_mag_mel_log, m_real_mel, m_imag_mel, v_f0, nfft, fs, mvf, f0_type='lf0', hf_slope_coeff=1.0, b_use_ap_voi=True, b_voi_ap_win=True):
+def synthesis_from_compressed(m_mag_mel_log, m_real_mel, m_imag_mel, v_lf0, fs, nfft, mvf=4500, hf_slope_coeff=1.0, b_use_ap_voi=True, b_voi_ap_win=True):
     
-    if f0_type=='lf0':
-        v_f0 = np.exp(v_f0)
+    # Constants for spectral crossfade (in Hz):
+    crsf_bw = 2000
+    if fs==48000:
+        crsf_cf = 5000
+    elif fs==16000:
+        crsf_cf = 3000
+    elif fs==44100:
+        crsf_cf = 4500 # TODO: test and tune this constant (for now, roughly approx.)
+        warnings.warn('Constant crsf_cf not tested nor tunned to synthesise at fs=%d Hz.' % fs)
+    elif fs==22050:
+        crsf_cf = 3500 # TODO: test and tune this constant (for now, roughly approx.)
+        warnings.warn('Constant crsf_cf not tested nor tunned to synthesise at fs=%d Hz.' % fs)
+    else:
+        crsf_cf = 3500
+        warnings.warn('Constant crsf_cf not tested nor tunned to synthesise at fs=%d Hz.' % fs)
+
+    alpha = define_alpha(fs)
+
+    v_f0 = np.exp(v_lf0)
         
     nfrms, ncoeffs_mag = m_mag_mel_log.shape
     ncoeffs_comp = m_real_mel.shape[1] 
     nfft_half    = nfft / 2 + 1
 
     # Magnitude mel-unwarp:----------------------------------------------------
-    m_mag = np.exp(la.sp_mel_unwarp(m_mag_mel_log, nfft_half, alpha=0.77, in_type='log'))
+    m_mag = np.exp(la.sp_mel_unwarp(m_mag_mel_log, nfft_half, alpha=alpha, in_type='log'))
 
     # Complex mel-unwarp:------------------------------------------------------
     f_intrp_real = interpolate.interp1d(np.arange(ncoeffs_comp), m_real_mel, kind='nearest', fill_value='extrapolate')
@@ -502,8 +550,8 @@ def synthesis_with_del_comp_and_ph_encoding5(m_mag_mel_log, m_real_mel, m_imag_m
     m_real_mel = f_intrp_real(np.arange(ncoeffs_mag))
     m_imag_mel = f_intrp_imag(np.arange(ncoeffs_mag)) 
     
-    m_real = la.sp_mel_unwarp(m_real_mel, nfft_half, alpha=0.77, in_type='log')   
-    m_imag = la.sp_mel_unwarp(m_imag_mel, nfft_half, alpha=0.77, in_type='log') 
+    m_real = la.sp_mel_unwarp(m_real_mel, nfft_half, alpha=alpha, in_type='log')
+    m_imag = la.sp_mel_unwarp(m_imag_mel, nfft_half, alpha=alpha, in_type='log')
     
     # Noise Gen:---------------------------------------------------------------
     v_shift = f0_to_shift(v_f0, fs, unv_frm_rate_ms=5).astype(int)
@@ -527,9 +575,6 @@ def synthesis_with_del_comp_and_ph_encoding5(m_mag_mel_log, m_real_mel, m_imag_m
     m_ns_cmplx = la.remove_hermitian_half(np.fft.fft(m_frm_ns))
 
     # AP-Mask:-----------------------------------------------------------------   
-    cf = 5000 #5000
-    bw = 2000 #2000 
-    
     # Norm gain:
     m_ns_mag  = np.absolute(m_ns_cmplx)
     rms_noise = np.sqrt(np.mean(m_ns_mag**2)) # checkear!!!!
@@ -537,7 +582,7 @@ def synthesis_with_del_comp_and_ph_encoding5(m_mag_mel_log, m_real_mel, m_imag_m
     m_ap_mask = m_mag * m_ap_mask / rms_noise
 
     m_zeros = np.zeros((nfrms, nfft_half))    
-    m_ap_mask[vb_voi,:] = la.spectral_crossfade(m_zeros[vb_voi,:], m_ap_mask[vb_voi,:], cf, bw, fs, freq_scale='hz') 
+    m_ap_mask[vb_voi,:] = la.spectral_crossfade(m_zeros[vb_voi,:], m_ap_mask[vb_voi,:], crsf_cf, crsf_bw, fs, freq_scale='hz')
     
     # HF - enhancement:          
     v_slope  = np.linspace(1, hf_slope_coeff, num=nfft_half)
@@ -546,7 +591,7 @@ def synthesis_with_del_comp_and_ph_encoding5(m_mag_mel_log, m_real_mel, m_imag_m
     # Det-Mask:----------------------------------------------------------------    
     m_det_mask = m_mag
     m_det_mask[~vb_voi,:] = 0
-    m_det_mask[vb_voi,:]  = la.spectral_crossfade(m_det_mask[vb_voi,:], m_zeros[vb_voi,:], cf, bw, fs, freq_scale='hz')
+    m_det_mask[vb_voi,:]  = la.spectral_crossfade(m_det_mask[vb_voi,:], m_zeros[vb_voi,:], crsf_cf, crsf_bw, fs, freq_scale='hz')
     
     # Applying masks:----------------------------------------------------------
     m_ap_cmplx  = m_ap_mask  * m_ns_cmplx
@@ -558,7 +603,7 @@ def synthesis_with_del_comp_and_ph_encoding5(m_mag_mel_log, m_real_mel, m_imag_m
 
     m_det_cmplx = m_det_mask * m_det_cmplx / m_det_cmplx_abs
 
-    # bin width: bw=11.71875 Hz    
+    # bin width: bw=11.71875 Hz
     # Final synth:-------------------------------------------------------------
     m_syn_cmplx = la.add_hermitian_half(m_ap_cmplx + m_det_cmplx, data_type='complex')    
     m_syn_td    = np.fft.ifft(m_syn_cmplx).real
@@ -566,10 +611,10 @@ def synthesis_with_del_comp_and_ph_encoding5(m_mag_mel_log, m_real_mel, m_imag_m
     v_syn_sig   = ola(m_syn_td,  v_pm, win_func=None)
        
     # HPF:---------------------------------------------------------------------     
-    fc = 60
+    fc    = 60
     order = 4
-    fc_norm = fc / (fs / 2.0)
-    bc, ac = signal.ellip(order,0.5 , 80, fc_norm, btype='highpass')
+    fc_norm   = fc / (fs / 2.0)
+    bc, ac    = signal.ellip(order,0.5 , 80, fc_norm, btype='highpass')
     v_syn_sig = signal.lfilter(bc, ac, v_syn_sig)
 
     return v_syn_sig   
@@ -852,7 +897,8 @@ def synthesis_with_del_comp_and_ph_encoding3(m_spmgc, m_phs_mgc, m_phc_mgc, v_sh
     return v_sig_syn, m_frm_syn, m_mag_syn, m_sp_targ, m_frm_noise, m_frm_voi_noise, m_mag
  
 #==============================================================================
-def synthesis_wit_del_comp_from_raw_params(m_mag, m_real, m_imag, v_f0, fs):
+#def synthesis_wit_del_comp_from_raw_params(m_mag, m_real, m_imag, v_f0, fs):
+def synthesis_from_lossless(m_mag, m_real, m_imag, v_f0, fs):
 
     m_ph_cmpx = m_real + m_imag * 1j
     m_fft     = m_mag * m_ph_cmpx / np.absolute(m_ph_cmpx)
@@ -1362,9 +1408,14 @@ def get_shifts_and_frm_locs_from_const_shifts(v_shift_c_rate, frm_rate_ms, fs, i
 
 def post_filter(m_mag_mel_log):
 
-    # Constants:
-    av_len_strt = 11
-    av_len_end  = 3
+
+    ncoeffs = m_mag_mel_log.shape[1]
+    if ncoeffs!=60:
+        warnings.warn('The postfilter has been only tested with 60 dimensional mag data. If you use another dimension, the result may be suboptimal.')
+
+    # TODO: Define and test the av_len* with dimensions other than 60:
+    av_len_strt = lu.round_to_int(11.0 * ncoeffs / 60.0)
+    av_len_end  = lu.round_to_int(3.0  * ncoeffs / 60.0)
 
     # Body:
     nfrms, nbins_mel = m_mag_mel_log.shape
@@ -1400,4 +1451,123 @@ def post_filter(m_mag_mel_log):
         m_mag_mel_log_enh[nxf,:] = v_mag_mel_log_enh
 
     return m_mag_mel_log_enh
-   
+
+def format_for_modelling(m_mag, m_real, m_imag, v_f0, fs, nbins_mel=60, nbins_phase=45):
+
+    # alpha:
+    alpha = define_alpha(fs)
+
+    # f0 to Smoothed lf0:
+    v_voi = (v_f0>0).astype('float')
+    v_f0_smth  = v_voi * signal.medfilt(v_f0)
+    v_lf0_smth = la.f0_to_lf0(v_f0_smth)
+
+    # Mag to Log-Mag-Mel (compression):
+    m_mag_mel = la.sp_mel_warp(m_mag, nbins_mel, alpha=alpha, in_type=3)
+    m_mag_mel_log = np.log(m_mag_mel)
+
+    # Phase feats to Mel-phase (compression):
+    m_imag_mel = la.sp_mel_warp(m_imag, nbins_mel, alpha=alpha, in_type=2)
+    m_real_mel = la.sp_mel_warp(m_real, nbins_mel, alpha=alpha, in_type=2)
+
+    # Cutting phase vectors:
+    m_real_mel = m_real_mel[:,:nbins_phase]
+    m_imag_mel = m_imag_mel[:,:nbins_phase]
+
+    # Removing phase in unvoiced frames ("random" values):
+    m_real_mel = m_real_mel * v_voi[:,None]
+    m_imag_mel = m_imag_mel * v_voi[:,None]
+
+    # Clipping between -1 and 1:
+    m_real_mel = np.clip(m_real_mel, -1, 1)
+    m_imag_mel = np.clip(m_imag_mel, -1, 1)
+
+    return m_mag_mel_log, m_real_mel, m_imag_mel, v_lf0_smth
+
+
+def write_featfile(m_data, out_dir, filename):
+
+    filepath = os.path.join(out_dir, filename)
+    lu.write_binfile(m_data, filepath)
+    return
+
+def analysis_lossless(wav_file, fft_len=None, out_dir=None):
+
+    # Read file:
+    v_sig, fs = sf.read(wav_file)
+
+    # Epoch detection:
+    est_file = lu.ins_pid('temp.est')
+    la.reaper(wav_file, est_file)
+    v_pm_sec, v_voi = la.read_reaper_est_file(est_file, check_len_smpls=len(v_sig), fs=fs)
+    os.remove(est_file)
+    v_pm_smpls = v_pm_sec * fs
+
+    # Spectral analysis:
+    m_fft, v_shift = analysis_with_del_comp_from_pm(v_sig, fs, v_pm_smpls, fft_len=fft_len)
+
+    # Getting high-ress magphase feats:
+    m_mag, m_real, m_imag, v_f0 = compute_lossless_feats(m_fft, v_shift, v_voi, fs)
+
+    # If output directory provided, features are written to disk:
+    if type(out_dir) is str:
+        file_id = os.path.basename(wav_file).split(".")[0]
+        write_featfile(m_mag  , out_dir, file_id + '.mag')
+        write_featfile(m_real , out_dir, file_id + '.real')
+        write_featfile(m_imag , out_dir, file_id + '.imag')
+        write_featfile(v_f0   , out_dir, file_id + '.f0')
+        write_featfile(v_shift, out_dir, file_id + '.shift')
+        return
+
+    return m_mag, m_real, m_imag, v_f0, fs, v_shift
+
+def analysis_compressed(wav_file, fft_len=None, out_dir=None, nbins_mel=60, nbins_phase=45):
+
+    # Analysis:
+    m_mag, m_real, m_imag, v_f0, fs, v_shift = analysis_lossless(wav_file, fft_len=fft_len)
+
+    # Formatting for Acoustic Modelling:
+    m_mag_mel_log, m_real_mel, m_imag_mel, v_lf0_smth = format_for_modelling(m_mag, m_real, m_imag, v_f0, fs, nbins_mel=nbins_mel, nbins_phase=nbins_phase)
+    fft_len = 2*(np.size(m_mag,1) - 1)
+
+    # Save features:
+    if type(out_dir) is str:
+        file_id = os.path.basename(wav_file).split(".")[0]
+        write_featfile(m_mag_mel_log, out_dir, file_id + '.mag')
+        write_featfile(m_real_mel   , out_dir, file_id + '.real')
+        write_featfile(m_imag_mel   , out_dir, file_id + '.imag')
+        write_featfile(v_lf0_smth   , out_dir, file_id + '.lf0')
+        write_featfile(v_shift      , out_dir, file_id + '.shift')
+        return
+
+    return m_mag_mel_log, m_real_mel, m_imag_mel, v_lf0_smth, v_shift, fs, fft_len
+
+
+def synthesis_from_acoustic_modelling(in_feats_dir, filename_token, out_syn_dir, nbins_mel, nbins_phase, fs, fft_len, b_postfilter):
+
+    # Reading parameter files:
+    m_mag_mel_log = lu.read_binfile(in_feats_dir + '/' + filename_token + '.mag' , dim=nbins_mel)
+    m_real_mel    = lu.read_binfile(in_feats_dir + '/' + filename_token + '.real', dim=nbins_phase)
+    m_imag_mel    = lu.read_binfile(in_feats_dir + '/' + filename_token + '.imag', dim=nbins_phase)
+    v_lf0         = lu.read_binfile(in_feats_dir + '/' + filename_token + '.lf0' , dim=1)
+
+    if b_postfilter:
+        m_mag_mel_log = post_filter(m_mag_mel_log)
+
+    # Waveform generation:
+    v_syn_sig = synthesis_from_compressed(m_mag_mel_log, m_real_mel, m_imag_mel, v_lf0, fs, fft_len)
+    la.write_audio_file(out_syn_dir + '/' + filename_token + '.wav', v_syn_sig, fs)
+    return
+
+def define_alpha(fs):
+    if fs==16000:
+        alpha = 0.58
+    elif fs==22050:
+        alpha = 0.65
+    elif fs==44100:
+        alpha = 0.76
+    elif fs==48000:
+        alpha = 0.77
+    else:
+        raise ValueError("Sample rate %d not supported yet." % (fs))
+    return alpha
