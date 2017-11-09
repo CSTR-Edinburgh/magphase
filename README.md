@@ -35,7 +35,7 @@ See the LICENCE file for details.
 1. Install Pyhton 2.7 and the packages required using the package manager of your distro or by using the command pip (recomended).
 e.g.,
 ```
-sudo pip install numpy scipy soundfile matplotlib
+pip install numpy scipy soundfile matplotlib
 ```
 
 2. If you have SPTK and REAPER already installed in your system (e.g. in a Merlin installation), edit the **config.ini** file providing the paths for **reaper** and the SPTK's **mcep** binaries. Otherwise, download and compile SPTK and REAPER by:
