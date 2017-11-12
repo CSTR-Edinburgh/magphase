@@ -159,6 +159,8 @@ def analysis_with_del_comp_from_est_file(v_in_sig, est_file, fs, nFFT=None, win_
 
     return m_sp, m_ph, v_shift, v_voi, m_frms, m_fft
 
+
+
 #==============================================================================
 # From (after) 'analysis_with_del_comp':
 # new: returns voi/unv decision.
@@ -166,13 +168,9 @@ def analysis_with_del_comp_from_pm(v_in_sig, fs, v_pm_smpls, fft_len=None, win_f
 
     # If the FFT length is not provided, some safe values are assumed.
     # You can try decreasing the fft length if wanted.
+
     if fft_len is None:
-        if (fs==22050) or (fs==16000):
-            fft_len = 2048
-        elif (fs==8000):
-            fft_len = 1024
-        else: # TODO: Add warning??
-            fft_len = 4096
+        fft_len = define_fft_len(fs)
 
     # Generate intermediate epocs:
     v_pm_smpls_defi = v_pm_smpls
@@ -494,11 +492,6 @@ def synthesis_with_del_comp__ph_enc__from_f0(m_spmgc, m_phs, m_phc, v_f0, nFFT, 
     #v_syn_sig = synthesis_with_del_comp_and_ph_encoding_voi_unv_separated(m_spmgc, m_phs, m_phc, v_shift, v_voi, nFFT, fs, mvf, ph_hf_gen)
 
     return v_syn_sig
-
-    
-#==============================================================================
-
-
     
 #==============================================================================
 # v2: Improved phase generation. 
@@ -514,34 +507,21 @@ def synthesis_with_del_comp__ph_enc__from_f0(m_spmgc, m_phs, m_phc, v_f0, nFFT, 
 # If v_voy=='estim', the mask is estimated from phase data.
 # hf_slope_coeff: 1=no slope, 2=finishing with twice the energy at highest frequency.
 #def synthesis_with_del_comp_and_ph_encoding5(m_mag_mel_log, m_real_mel, m_imag_mel, v_f0, nfft, fs, mvf, f0_type='lf0', hf_slope_coeff=1.0, b_use_ap_voi=True, b_voi_ap_win=True):
-def synthesis_from_compressed(m_mag_mel_log, m_real_mel, m_imag_mel, v_lf0, fs, nfft, mvf=4500, hf_slope_coeff=1.0, b_use_ap_voi=True, b_voi_ap_win=True):
+def synthesis_from_compressed(m_mag_mel_log, m_real_mel, m_imag_mel, v_lf0, fs, fft_len=None, hf_slope_coeff=1.0, b_voi_ap_win=True):
     
     # Constants for spectral crossfade (in Hz):
-    crsf_bw = 2000
-    if fs==48000:
-        crsf_cf = 5000
-    elif fs==16000:
-        crsf_cf = 3000
-    elif fs==44100:
-        crsf_cf = 4500 # TODO: test and tune this constant (for now, roughly approx.)
-        warnings.warn('Constant crsf_cf not tested nor tunned to synthesise at fs=%d Hz.' % fs)
-    elif fs==22050:
-        crsf_cf = 3500 # TODO: test and tune this constant (for now, roughly approx.)
-        warnings.warn('Constant crsf_cf not tested nor tunned to synthesise at fs=%d Hz.' % fs)
-    else:
-        crsf_cf = 3500
-        warnings.warn('Constant crsf_cf not tested nor tunned to synthesise at fs=%d Hz.' % fs)
-
+    crsf_cf, crsf_bw = define_crossfade_params(fs)
     alpha = define_alpha(fs)
+    if fft_len==None:
+        fft_len = define_fft_len(fs)
 
+    fft_len_half = fft_len / 2 + 1
     v_f0 = np.exp(v_lf0)
-        
     nfrms, ncoeffs_mag = m_mag_mel_log.shape
     ncoeffs_comp = m_real_mel.shape[1] 
-    nfft_half    = nfft / 2 + 1
 
     # Magnitude mel-unwarp:----------------------------------------------------
-    m_mag = np.exp(la.sp_mel_unwarp(m_mag_mel_log, nfft_half, alpha=alpha, in_type='log'))
+    m_mag = np.exp(la.sp_mel_unwarp(m_mag_mel_log, fft_len_half, alpha=alpha, in_type='log'))
 
     # Complex mel-unwarp:------------------------------------------------------
     f_intrp_real = interpolate.interp1d(np.arange(ncoeffs_comp), m_real_mel, kind='nearest', fill_value='extrapolate')
@@ -550,8 +530,8 @@ def synthesis_from_compressed(m_mag_mel_log, m_real_mel, m_imag_mel, v_lf0, fs, 
     m_real_mel = f_intrp_real(np.arange(ncoeffs_mag))
     m_imag_mel = f_intrp_imag(np.arange(ncoeffs_mag)) 
     
-    m_real = la.sp_mel_unwarp(m_real_mel, nfft_half, alpha=alpha, in_type='log')
-    m_imag = la.sp_mel_unwarp(m_imag_mel, nfft_half, alpha=alpha, in_type='log')
+    m_real = la.sp_mel_unwarp(m_real_mel, fft_len_half, alpha=alpha, in_type='log')
+    m_imag = la.sp_mel_unwarp(m_imag_mel, fft_len_half, alpha=alpha, in_type='log')
     
     # Noise Gen:---------------------------------------------------------------
     v_shift = f0_to_shift(v_f0, fs, unv_frm_rate_ms=5).astype(int)
@@ -570,7 +550,7 @@ def synthesis_from_compressed(m_mag_mel_log, m_real_mel, m_imag_mel, v_lf0, fs, 
 
     l_frm_ns, v_lens, v_pm_plus, v_shift_dummy, v_rights = windowing(v_ns, v_pm, win_func=l_ns_win_funcs)   # Checkear!! 
     
-    m_frm_ns  = la.frm_list_to_matrix(l_frm_ns, v_shift, nfft)
+    m_frm_ns  = la.frm_list_to_matrix(l_frm_ns, v_shift, fft_len)
     m_frm_ns  = np.fft.fftshift(m_frm_ns, axes=1)    
     m_ns_cmplx = la.remove_hermitian_half(np.fft.fft(m_frm_ns))
 
@@ -581,11 +561,11 @@ def synthesis_from_compressed(m_mag_mel_log, m_real_mel, m_imag_mel, v_lf0, fs, 
     m_ap_mask = np.ones(m_ns_mag.shape)
     m_ap_mask = m_mag * m_ap_mask / rms_noise
 
-    m_zeros = np.zeros((nfrms, nfft_half))    
+    m_zeros = np.zeros((nfrms, fft_len_half))
     m_ap_mask[vb_voi,:] = la.spectral_crossfade(m_zeros[vb_voi,:], m_ap_mask[vb_voi,:], crsf_cf, crsf_bw, fs, freq_scale='hz')
     
     # HF - enhancement:          
-    v_slope  = np.linspace(1, hf_slope_coeff, num=nfft_half)
+    v_slope  = np.linspace(1, hf_slope_coeff, num=fft_len_half)
     m_ap_mask[~vb_voi,:] = m_ap_mask[~vb_voi,:] * v_slope 
     
     # Det-Mask:----------------------------------------------------------------    
@@ -652,8 +632,7 @@ def synthesis_with_del_comp_and_ph_encoding4(m_spmgc, m_phs_mgc, m_phc_mgc, v_sh
     nFFThalf = nFFT / 2 + 1
     m_phs_shrt_syn = np.clip(m_phs_shrt_syn, -1, 1)  
     m_phc_shrt_syn = np.clip(m_phc_shrt_syn, -1, 1)  
-    m_ph_deter     = ph_dec(m_phs_shrt_syn, m_phc_shrt_syn, mode='angle') 
-    #m_ph_deter     = np.hstack((m_ph_deter, np.zeros((nfrms,nFFThalf-mvf_bin))))
+    m_ph_deter     = ph_dec(m_phs_shrt_syn, m_phc_shrt_syn, mode='angle')
     
     # Debug:
     f = interpolate.interp1d(np.arange(mvf_bin), m_ph_deter, kind='nearest', fill_value='extrapolate')
@@ -662,8 +641,7 @@ def synthesis_with_del_comp_and_ph_encoding4(m_spmgc, m_phs_mgc, m_phc_mgc, v_sh
     # TD Noise Gen:---------------------------------------    
     v_pm    = la.shift_to_pm(v_shift)
     sig_len = v_pm[-1] + (v_pm[-1] - v_pm[-2]) 
-    v_noise = np.random.uniform(-1, 1, sig_len)    
-    #v_noise = np.random.normal(size=sig_len)
+    v_noise = np.random.uniform(-1, 1, sig_len)
     
     # Extract noise magnitude and phase for unvoiced segments: (TODO: make it more efficient!)-------------------------------
     win_func_unv = np.hanning    
@@ -1406,8 +1384,7 @@ def get_shifts_and_frm_locs_from_const_shifts(v_shift_c_rate, frm_rate_ms, fs, i
     return v_shift_vr, v_frm_locs_smpls
 
 
-def post_filter(m_mag_mel_log):
-
+def post_filter_backup_old(m_mag_mel_log):
 
     ncoeffs = m_mag_mel_log.shape[1]
     if ncoeffs!=60:
@@ -1451,6 +1428,84 @@ def post_filter(m_mag_mel_log):
         m_mag_mel_log_enh[nxf,:] = v_mag_mel_log_enh
 
     return m_mag_mel_log_enh
+
+
+def post_filter(m_mag_mel_log, fs, av_len_at_zero=None, av_len_at_nyq=None, boost_at_zero=None, boost_at_nyq=None):
+
+    nfrms, nbins_mel = m_mag_mel_log.shape
+    if nbins_mel!=60:
+        warnings.warn('The postfilter has been only tested with 60 dimensional mag data. If you use another dimension, the result may be suboptimal.')
+
+    # Defaults in case options are not provided by the user:
+    if fs==48000:
+        if av_len_at_zero is None:
+            av_len_at_zero = lu.round_to_int(11.0 * (nbins_mel / 60.0))
+
+        if av_len_at_nyq is None:
+            av_len_at_nyq = lu.round_to_int(3.0  * (nbins_mel / 60.0))
+
+        if boost_at_zero is None:
+            boost_at_zero = 2.0
+
+        if boost_at_nyq is None:
+            boost_at_nyq = 6.0
+
+    elif fs==16000:
+        if av_len_at_zero is None:
+            av_len_at_zero = lu.round_to_int(9.0 * (nbins_mel / 60.0))
+
+        if av_len_at_nyq is None:
+            av_len_at_nyq = lu.round_to_int(12.0  * (nbins_mel / 60.0))
+
+        if boost_at_zero is None:
+            boost_at_zero = 2.0
+
+        if boost_at_nyq is None:
+            boost_at_nyq = 1.6
+
+    else: # No default values for other sample rates yet.
+        if any(option is None for option in [av_len_at_zero, av_len_at_nyq, boost_at_zero, boost_at_nyq]):
+            raise ValueError('The postfilter has only been tested with 16kHz and 48kHz sample rates.' + \
+                '\nProvide your own values for the options: av_len_at_zero, av_len_at_nyq, boost_at_zero, boost_at_nyq')
+
+    # Body:
+    v_ave  = np.zeros(nbins_mel)
+    v_nx   = np.arange(np.floor(av_len_at_zero/2), nbins_mel - np.floor(av_len_at_nyq/2)).astype(int)
+    v_lens = np.linspace(av_len_at_zero, av_len_at_nyq, v_nx.size)
+    v_lens = (2*np.ceil(v_lens/2) - 1).astype(int)
+
+    m_mag_mel_log_enh = np.zeros(m_mag_mel_log.shape)
+    for nxf in xrange(nfrms):
+
+        v_mag_mel_log = m_mag_mel_log[nxf,:]
+
+        # Average:
+        for nxb in v_nx:
+            halflen    = np.floor(v_lens[nxb-v_nx[0]]/2).astype(int)
+            v_ave[nxb] = np.mean(v_mag_mel_log[(nxb-halflen):(nxb+halflen+1)])
+
+        # Fixing boundaries:
+        v_ave[:v_nx[0]]  = v_ave[v_nx[0]]
+        v_ave[v_nx[-1]:] = v_ave[v_nx[-1]]
+
+        # Substracting average:
+        v_mag_mel_log_norm = v_mag_mel_log - v_ave
+
+        # Debug:
+        if False:
+            from libplot import lp; lp.figure(); lp.plot(v_mag_mel_log); lp.plot(v_ave); lp.plot(v_mag_mel_log_norm); lp.grid(); lp.show()
+
+        # Enhance:==========================================================================
+        v_tilt_fact = np.linspace(boost_at_zero, boost_at_nyq, nbins_mel)
+        v_mag_mel_log_enh = (v_mag_mel_log_norm * v_tilt_fact) + v_ave
+        v_mag_mel_log_enh[0]  = v_mag_mel_log[0]
+        v_mag_mel_log_enh[-1] = v_mag_mel_log[-1]
+
+        # Saving:
+        m_mag_mel_log_enh[nxf,:] = v_mag_mel_log_enh
+
+    return m_mag_mel_log_enh
+
 
 def format_for_modelling(m_mag, m_real, m_imag, v_f0, fs, nbins_mel=60, nbins_phase=45):
 
@@ -1543,7 +1598,7 @@ def analysis_compressed(wav_file, fft_len=None, out_dir=None, nbins_mel=60, nbin
     return m_mag_mel_log, m_real_mel, m_imag_mel, v_lf0_smth, v_shift, fs, fft_len
 
 
-def synthesis_from_acoustic_modelling(in_feats_dir, filename_token, out_syn_dir, nbins_mel, nbins_phase, fs, fft_len, b_postfilter):
+def synthesis_from_acoustic_modelling(in_feats_dir, filename_token, out_syn_dir, nbins_mel, nbins_phase, fs, b_postfilter, fft_len=None):
 
     # Reading parameter files:
     m_mag_mel_log = lu.read_binfile(in_feats_dir + '/' + filename_token + '.mag' , dim=nbins_mel)
@@ -1552,10 +1607,10 @@ def synthesis_from_acoustic_modelling(in_feats_dir, filename_token, out_syn_dir,
     v_lf0         = lu.read_binfile(in_feats_dir + '/' + filename_token + '.lf0' , dim=1)
 
     if b_postfilter:
-        m_mag_mel_log = post_filter(m_mag_mel_log)
+        m_mag_mel_log = post_filter(m_mag_mel_log, fs)
 
     # Waveform generation:
-    v_syn_sig = synthesis_from_compressed(m_mag_mel_log, m_real_mel, m_imag_mel, v_lf0, fs, fft_len)
+    v_syn_sig = synthesis_from_compressed(m_mag_mel_log, m_real_mel, m_imag_mel, v_lf0, fs, fft_len=fft_len)
     la.write_audio_file(out_syn_dir + '/' + filename_token + '.wav', v_syn_sig, fs)
     return
 
@@ -1571,3 +1626,30 @@ def define_alpha(fs):
     else:
         raise ValueError("Sample rate %d not supported yet." % (fs))
     return alpha
+
+def define_fft_len(fs):
+    if (fs==22050) or (fs==16000):
+        fft_len = 2048
+    elif (fs==8000):
+        fft_len = 1024
+    else: # TODO: Add warning??
+        fft_len = 4096
+    return fft_len
+
+def define_crossfade_params(fs):
+    crsf_bw = 2000
+    if fs==48000:
+        crsf_cf = 5000
+    elif fs==16000:
+        crsf_cf = 3000
+    elif fs==44100:
+        crsf_cf = 4500 # TODO: test and tune this constant (for now, roughly approx.)
+        warnings.warn('Constant crsf_cf not tested nor tunned to synthesise at fs=%d Hz.' % fs)
+    elif fs==22050:
+        crsf_cf = 3500 # TODO: test and tune this constant (for now, roughly approx.)
+        warnings.warn('Constant crsf_cf not tested nor tunned to synthesise at fs=%d Hz.' % fs)
+    else:
+        crsf_cf = 3500
+        warnings.warn('Constant crsf_cf not tested nor tunned to synthesise at fs=%d Hz.' % fs)
+
+    return crsf_cf, crsf_bw

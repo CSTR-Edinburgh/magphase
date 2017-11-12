@@ -24,16 +24,15 @@ import libutils as lu
 from libplot import lp
 import magphase as mp
 
-def synthesis(in_feats_dir, filename_token, out_syn_dir, nbins_mel, nbins_phase, fs, fft_len, b_postfilter):
+def synthesis(in_feats_dir, filename_token, out_syn_dir, nbins_mel, nbins_phase, fs, b_postfilter):
     print('\nGenerating wavefile: ' + filename_token + '................................')
-    mp.synthesis_from_acoustic_modelling(in_feats_dir, filename_token, out_syn_dir, nbins_mel, nbins_phase, fs, fft_len, b_postfilter)
+    mp.synthesis_from_acoustic_modelling(in_feats_dir, filename_token, out_syn_dir, nbins_mel, nbins_phase, fs, b_postfilter)
     return
 
 if __name__ == '__main__':  
 
     # CONSTANTS:
-    fft_len = 4096
-    fs      = 48000
+    fs = 48000
 
     # INPUT:==============================================================================
     files_scp     = '../data_48k/file_id.scp'     # List of file names (tokens). Format used by Merlin.
@@ -46,23 +45,20 @@ if __name__ == '__main__':
 
     b_parallel    = False  # If True, it synthesises using all the available cores in parallel. If False, it just uses one core (slower).
 
+
     # FILES SETUP:========================================================================
     lu.mkdir(out_syn_dir)
     l_file_tokns = lu.read_text_file2(files_scp, dtype='string', comments='#').tolist()
 
     # PROCESSING:=========================================================================
     if b_parallel:
-        lu.run_multithreaded(synthesis, in_feats_dir, l_file_tokns, out_syn_dir, nbins_mel, nbins_phase, fs, fft_len, b_postfilter)
+        lu.run_multithreaded(synthesis, in_feats_dir, l_file_tokns, out_syn_dir, nbins_mel, nbins_phase, fs, b_postfilter)
     else:
         for file_tokn in l_file_tokns:
-            synthesis(in_feats_dir, file_tokn, out_syn_dir, nbins_mel, nbins_phase, fs, fft_len, b_postfilter)
+            synthesis(in_feats_dir, file_tokn, out_syn_dir, nbins_mel, nbins_phase, fs, b_postfilter)
 
 
     print('Done!')
-
-
-
-
 
 
 
