@@ -349,8 +349,19 @@ def analysis_with_del_comp__ph_enc__f0_norm__from_files(wav_file, est_file, nFFT
 def compute_lossless_feats(m_fft, v_shift, v_voi, fs):
 
     m_mag  = np.absolute(m_fft) 
+
+    # Debug:
+    #m_mag[:10,:10] = 0.0
+
+    warnings.filterwarnings('ignore', 'divide\ by\ zero')
     m_real = m_fft.real / m_mag # = p_phc
     m_imag = m_fft.imag / m_mag # = p_phs
+    warnings.filterwarnings('default', 'divide\ by\ zero')
+
+    # Protection against division by zero.
+    m_real[np.abs(m_real)==np.inf] = 0
+    m_imag[np.abs(m_imag)==np.inf] = 0
+
     v_f0   = shift_to_f0(v_shift, v_voi, fs, out='f0', b_smooth=False)
 
     return m_mag, m_real, m_imag, v_f0
@@ -1434,7 +1445,7 @@ def post_filter(m_mag_mel_log, fs, av_len_at_zero=None, av_len_at_nyq=None, boos
 
     nfrms, nbins_mel = m_mag_mel_log.shape
     if nbins_mel!=60:
-        warnings.warn('The postfilter has been only tested with 60 dimensional mag data. If you use another dimension, the result may be suboptimal.')
+        warnings.warn('Post-filter: It has been only tested with 60 dimensional mag data. If you use another dimension, the result may be suboptimal.')
 
     # Defaults in case options are not provided by the user:
     if fs==48000:
@@ -1445,12 +1456,15 @@ def post_filter(m_mag_mel_log, fs, av_len_at_zero=None, av_len_at_nyq=None, boos
             av_len_at_nyq = lu.round_to_int(3.0  * (nbins_mel / 60.0))
 
         if boost_at_zero is None:
-            boost_at_zero = 2.0
+            boost_at_zero = 1.8 # 2.0
 
         if boost_at_nyq is None:
-            boost_at_nyq = 6.0
+            boost_at_nyq = 2.0 # 6.0
 
     elif fs==16000:
+        if any(option is None for option in [av_len_at_zero, av_len_at_nyq, boost_at_zero, boost_at_nyq]):
+            warnings.warn('Post-filter: The default parameters for 16kHz sample rate have not being tunned.')
+
         if av_len_at_zero is None:
             av_len_at_zero = lu.round_to_int(9.0 * (nbins_mel / 60.0))
 
@@ -1458,15 +1472,16 @@ def post_filter(m_mag_mel_log, fs, av_len_at_zero=None, av_len_at_nyq=None, boos
             av_len_at_nyq = lu.round_to_int(12.0  * (nbins_mel / 60.0))
 
         if boost_at_zero is None:
-            boost_at_zero = 2.0
+            boost_at_zero = 2.0 # 2.0
 
         if boost_at_nyq is None:
-            boost_at_nyq = 1.6
+            boost_at_nyq = 1.6 # 1.6
 
     else: # No default values for other sample rates yet.
         if any(option is None for option in [av_len_at_zero, av_len_at_nyq, boost_at_zero, boost_at_nyq]):
-            raise ValueError('The postfilter has only been tested with 16kHz and 48kHz sample rates.' + \
-                '\nProvide your own values for the options: av_len_at_zero, av_len_at_nyq, boost_at_zero, boost_at_nyq')
+            raise ValueError('Post-filter: It has only been tested with 16kHz and 48kHz sample rates.' + \
+                '\nProvide your own values for the options: av_len_at_zero, av_len_at_nyq, boost_at_zero,' + \
+                '\nboost_at_nyq if you use another sample rate')
 
     # Body:
     v_ave  = np.zeros(nbins_mel)
@@ -1495,7 +1510,7 @@ def post_filter(m_mag_mel_log, fs, av_len_at_zero=None, av_len_at_nyq=None, boos
         if False:
             from libplot import lp; lp.figure(); lp.plot(v_mag_mel_log); lp.plot(v_ave); lp.plot(v_mag_mel_log_norm); lp.grid(); lp.show()
 
-        # Enhance:==========================================================================
+        # Enhance:
         v_tilt_fact = np.linspace(boost_at_zero, boost_at_nyq, nbins_mel)
         v_mag_mel_log_enh = (v_mag_mel_log_norm * v_tilt_fact) + v_ave
         v_mag_mel_log_enh[0]  = v_mag_mel_log[0]
