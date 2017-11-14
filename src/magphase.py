@@ -191,9 +191,11 @@ def analysis_with_del_comp_from_pm(v_in_sig, fs, v_pm_smpls, fft_len=None, win_f
     l_frms, v_lens, v_pm_plus, v_shift, v_rights = windowing(v_in_sig, v_pm_smpls_defi, win_func=win_func)
     
     # FFT:---------------------------------------------------------------------
-    len_max = np.max(v_lens) # max frame length in file    
-    if fft_len < len_max:
-        raise ValueError("fft_len (%d) is shorter than the maximum frame length (%d). Please, increase de FFT length." % (fft_len,len_max))
+    #len_max = np.max(v_lens) # max frame length in file
+    #if fft_len < len_max:
+    #    warnings.warn("fft_len (%d) is shorter than the maximum detected frame length (%d). " \
+    #                  + "This issue is not very critical, but if it occurs often (e.g., more than 3 times per utterance), " \
+    #                  + "please increase de FFT length." % (fft_len,len_max))
     
     n_frms = len(l_frms)
     m_frms = np.zeros((n_frms, fft_len))
@@ -201,9 +203,17 @@ def analysis_with_del_comp_from_pm(v_in_sig, fs, v_pm_smpls, fft_len=None, win_f
     # For paper:--------------------------------
     #m_frms_orig = np.zeros((n_frms, fft_len))
     # ------------------------------------------
-    
-    for f in xrange(n_frms):           
-        m_frms[f,0:v_lens[f]] = l_frms[f]
+    warnmess  = "fft_len (%d) is shorter than the current detected frame length (%d). "
+    warnmess += "This issue is not very critical, but if it occurs often "
+    warnmess += "(e.g., more than 3 times per utterance), please increase de FFT length."
+    for f in xrange(n_frms):
+
+        if v_lens[f]<=fft_len:
+            m_frms[f,0:v_lens[f]] = l_frms[f]
+        else:
+            m_frms[f,:] = l_frms[f][:fft_len]
+            warnings.warn(warnmess % (fft_len, v_lens[f]))
+
         # un-delay the signal:
         v_curr_frm  = m_frms[f,:]     
         
