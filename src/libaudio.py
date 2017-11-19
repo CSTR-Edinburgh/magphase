@@ -732,7 +732,7 @@ def convert_label_state_align_to_var_frame_rate(in_lab_st_file, v_dur_state, out
     shift_ms = 5.0
 
     # Read input files:
-    mstr_labs_st = np.loadtxt(in_lab_st_file, dtype='string', delimiter=" ", comments=None, usecols=2)
+    mstr_labs_st = np.loadtxt(in_lab_st_file, dtype='string', delimiter=" ", comments=None, usecols=(2,))
 
     v_dur_ms = v_dur_state * shift_ms
     v_dur_ns = v_dur_ms * 10000
@@ -749,3 +749,5 @@ def convert_label_state_align_to_var_frame_rate(in_lab_st_file, v_dur_state, out
     # Save file:
     np.savetxt(out_lab_st_file, mstr_out_labs_st,  fmt='%s')
     return
+
+
