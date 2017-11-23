@@ -450,6 +450,7 @@ def read_reaper_est_file(est_file, check_len_smpls=-1, fs=-1, skiprows=7, usecol
 
     # Read text: TODO: improve skiprows
     m_data = np.loadtxt(est_file, skiprows=skiprows, usecols=usecols)
+    m_data = np.atleast_2d(m_data)
     v_pm_sec  = m_data[:,0]
     v_voi = m_data[:,1]
 
