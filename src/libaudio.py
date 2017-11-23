@@ -314,26 +314,40 @@ def read_audio_file(filepath, **kargs):
 # Write wav file:--------------------------------------------------------------
 # The format is picked automatically from the file extension. ('WAV', 'FLAC', 'OGG', 'AIFF', 'WAVEX', 'RAW', or 'MAT5')
 # v_signal be mono (TODO: stereo, comming soon), values [-1,1] are expected if no normalisation is selected.
-# option: norm. If False-> No norm, If 'max'-> normalises to the maximum absolute value, If ''
-# If norm provided, norm = 'max' by default
-def write_audio_file(filepath, v_signal, fs, **kargs):
+def write_audio_file(filepath, v_signal, fs, norm=0.98):
+    '''
+    norm: If None, no normalisation is applied. If it is a float number,
+          it is the target value (absolute) for the normalisation.
+    '''
     
-    # Parsing input:
-    if 'norm' in kargs:
-        if kargs['norm'] == False:
-            pass          
-            
-        elif kargs['norm'] == 'max':
-            v_signal = v_signal / np.max(np.abs(v_signal))
-            
-        del(kargs['norm'])
-    else:
-        v_signal = v_signal / np.max(np.abs(v_signal)) # default
+    # Normalisation:
+    if norm is not None:
+        v_signal = norm * v_signal / np.max(np.abs(v_signal)) # default
         
     # Write:    
-    sf.write(filepath, v_signal, fs, **kargs)
+    sf.write(filepath, v_signal, fs)
     
     return
+
+# def write_audio_file(filepath, v_signal, fs, **kargs):
+
+#     # Parsing input:
+#     if 'norm' in kargs:
+#         if kargs['norm'] == False:
+#             pass
+
+#         elif kargs['norm'] == 'max':
+#             v_signal = v_signal / np.max(np.abs(v_signal))
+
+#         del(kargs['norm'])
+#     else:
+#         v_signal = v_signal / np.max(np.abs(v_signal)) # default
+
+#     # Write:
+#     sf.write(filepath, v_signal, fs, **kargs)
+
+#     return
+
 
 '''
 # 1-D Smoothing by convolution: (from ScyPy Cookbook - not checked yet!)-----------------------------
@@ -733,7 +747,7 @@ def convert_label_state_align_to_var_frame_rate(in_lab_st_file, v_dur_state, out
     shift_ms = 5.0
 
     # Read input files:
-    mstr_labs_st = np.loadtxt(in_lab_st_file, dtype='string', delimiter=" ", comments=None, usecols=2)
+    mstr_labs_st = np.loadtxt(in_lab_st_file, dtype='string', delimiter=" ", comments=None, usecols=(2,))
 
     v_dur_ms = v_dur_state * shift_ms
     v_dur_ns = v_dur_ms * 10000
@@ -750,3 +764,5 @@ def convert_label_state_align_to_var_frame_rate(in_lab_st_file, v_dur_state, out
     # Save file:
     np.savetxt(out_lab_st_file, mstr_out_labs_st,  fmt='%s')
     return
+
+

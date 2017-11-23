@@ -1623,7 +1623,7 @@ def analysis_compressed(wav_file, fft_len=None, out_dir=None, nbins_mel=60, nbin
     return m_mag_mel_log, m_real_mel, m_imag_mel, v_lf0_smth, v_shift, fs, fft_len
 
 
-def synthesis_from_acoustic_modelling(in_feats_dir, filename_token, out_syn_dir, nbins_mel, nbins_phase, fs, b_postfilter, fft_len=None):
+def synthesis_from_acoustic_modelling(in_feats_dir, filename_token, out_syn_dir, nbins_mel, nbins_phase, fs, fft_len=None, b_postfilter=True):
 
     # Reading parameter files:
     m_mag_mel_log = lu.read_binfile(in_feats_dir + '/' + filename_token + '.mag' , dim=nbins_mel)
