@@ -23,15 +23,25 @@ Key points:
 * Remarkably reduces typical "buzziness" and "phasiness".
 * Many other applications and improvements not explored yet.
 
-## II. License:
+
+## II. Colaboration:
+We need help to improve this software. You can colaborate by:
+
+* **Building TTS voices using Merlin and MagPhase and compare with other vocoders, e.g., WORLD.** Then, please tell us your results. We have tested MagPhase only with a few voices and it's needed to cover a wider range. We have recently fixed some bugs that have came out thanks to people reporting their results using new data.
+
+
+* **Implementing native variable frame rate support in Merlin.** MagPhase works in a variable frame rate fashion (pitch synchronous). So far, in order to integrate Merlin with MagPhase, we have been applying a suboptimal [workaround](https://github.com/CSTR-Edinburgh/merlin/blob/master/egs/slt_arctic/s2/scripts/convert_label_state_align_to_variable_frame_rate.py). We stronlgy believe that the performance will be highly increased if Merlin's supported variable frame rate. Plase, let us know if you are interested on colaborating on this.
+
+
+## III. License:
 See the LICENCE file for details.
 
-## III. Prerequisites:
+## IV. Requirements:
 * OS: Linux (MacOSx coming soon)
 * Python 2.7
 * Standard Python packages: numpy, scipy, soundfile, matplotlib
 
-## IV. Install:
+## V. Install:
 1. Install Pyhton 2.7 and the packages required using the package manager of your distro or by using the command pip (recomended).
 e.g.,
 ```
@@ -45,7 +55,7 @@ cd tools
 ```
 This will compile and configure SPTK and REAPER automatically for you...and that's it!
 
-## V. Usage:
+## VI. Usage:
 Just go to ```/demos```, read the instructions inside the demo scripts, which are very discriptive.
 They should run out of the box by running ```python <demo_script>```.
 
@@ -56,26 +66,8 @@ Then, you can modify the demo scripts to suit your needs.
 
 **NOTE:** Just remember to run the scripts from their locations.
 
-## VI. Using with the Merlin toolkit:
-We provide demo scripts  in ```/demos/run_for_merlin```. Firstly, run the demos in order to learn how they work, and then you can adapt them to work with the Merlin toolkit and real data.
+## VII. Using MagPhase with the Merlin toolkit:
+We provide two demos distributed with the Merlin's official distribution. These  show examples of the of Merlin with MagPhase integration:
+* Text-To-Speech: [Merlin's slt_arctic demo](https://github.com/CSTR-Edinburgh/merlin/tree/master/egs/slt_arctic/s2) (small and full subset versions)
 
-When working with real data and the Merlin toolkit, follow these steps:
-
-1. Before training, run the scripts (with the paths pointing to your data): ```0_batch_feature_extraction_for_merlin.py``` , and then ```1_batch_convert_label_state_aligned_to_variable_frame_rate.py```
-
-2. Modify the Merlin config file and ```configure.py``` script to use the extracted MagPhase features:
-Use the features mag, real, imag, and lf0 as output parameters for the NN (instead of the defauls: mgc, bap, and lf0). The dimensions that you need to provide are (at least with the default configuration):
-lf0: 1
-dlf0: 3
-mag: 60
-dmag: 180
-real: 45
-dreal: 135
-imag: 45
-dimag: 135
-
-3. Modify the Merlin config file to use the variable rate label by pointing to the ```/labs_var_rate``` directory.
-
-4. Run all the Merlin steps up to DNNGEN (Do not run WAVGEN).
-
-5. Run the script ```2_batch_wave_generation.py``` to generate the waveforms from the parameters predicted by Merlin (usually stored in ```<experiment_dir>/data/gen/```)
+* Voice conversion: [Merlin's voice conversion demo](https://github.com/CSTR-Edinburgh/merlin/tree/master/egs/voice_conversion/s2) (roughly tested)
