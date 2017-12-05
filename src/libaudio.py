@@ -233,6 +233,7 @@ def log(m_x):
     '''    
     m_y = np.log(m_x) 
     m_y[np.isinf(m_y)] = MAGIC
+    m_y[np.isnan(m_y)] = MAGIC
     return m_y    
     
 #------------------------------------------------------------------------------

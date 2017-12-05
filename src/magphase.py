@@ -369,10 +369,12 @@ def compute_lossless_feats(m_fft, v_shift, v_voi, fs):
     warnings.filterwarnings('default', 'divide\ by\ zero')
 
     # Protection against division by zero.
-    m_real[np.abs(m_real)==np.inf] = 0
-    m_imag[np.abs(m_imag)==np.inf] = 0
+    m_real[np.abs(m_real)==np.inf] = 0.0
+    m_imag[np.abs(m_imag)==np.inf] = 0.0
+    m_real[np.isnan(m_real)] = 0.0
+    m_imag[np.isnan(m_imag)] = 0.0
 
-    v_f0   = shift_to_f0(v_shift, v_voi, fs, out='f0', b_smooth=False)
+    v_f0 = shift_to_f0(v_shift, v_voi, fs, out='f0', b_smooth=False)
 
     return m_mag, m_real, m_imag, v_f0
 
@@ -1544,7 +1546,7 @@ def format_for_modelling(m_mag, m_real, m_imag, v_f0, fs, nbins_mel=60, nbins_ph
 
     # Mag to Log-Mag-Mel (compression):
     m_mag_mel = la.sp_mel_warp(m_mag, nbins_mel, alpha=alpha, in_type=3)
-    m_mag_mel_log = np.log(m_mag_mel)
+    m_mag_mel_log =  la.log(m_mag_mel)
 
     # Phase feats to Mel-phase (compression):
     m_imag_mel = la.sp_mel_warp(m_imag, nbins_mel, alpha=alpha, in_type=2)
@@ -1585,6 +1587,11 @@ def analysis_lossless(wav_file, fft_len=None, out_dir=None):
 
     # Spectral analysis:
     m_fft, v_shift = analysis_with_del_comp_from_pm(v_sig, fs, v_pm_smpls, fft_len=fft_len)
+
+    # Debug:
+    if False:
+        from libplot import lp
+        lp.plotm(np.absolute(m_fft))
 
     # Getting high-ress magphase feats:
     m_mag, m_real, m_imag, v_f0 = compute_lossless_feats(m_fft, v_shift, v_voi, fs)
@@ -1666,7 +1673,7 @@ def define_crossfade_params(fs):
     if fs==48000:
         crsf_cf = 5000
     elif fs==16000:
-        crsf_cf = 3000
+        crsf_cf = 4500 #3000 # TODO: tune these values.
     elif fs==44100:
         crsf_cf = 4500 # TODO: test and tune this constant (for now, roughly approx.)
         warnings.warn('Constant crsf_cf not tested nor tunned to synthesise at fs=%d Hz.' % fs)
