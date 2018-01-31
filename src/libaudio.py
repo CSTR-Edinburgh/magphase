@@ -38,6 +38,56 @@ def parse_config():
     return
 parse_config()
 
+
+#------------------------------------------------------------------------------
+
+def true_envelope(m_sp, in_type='abs', ncoeffs=60, thres_db=0.1):
+    '''
+    in_type: 'abs', 'db', or 'log'
+    TODO: Test cases 'db' and 'log'
+    '''
+
+    if in_type=='db':
+        m_sp_db = m_sp
+    elif in_type=='abs':
+        m_sp_db = db(m_sp)
+    elif in_type=='log':
+        m_sp_db = (20.0 / np.log(10.0)) * m_sp
+
+    m_sp_db_env = np.zeros(m_sp_db.shape)
+    nFrms     = m_sp_db.shape[0]
+    n_maxiter = 100
+
+    for f in xrange(nFrms):
+        v_sp_db = m_sp_db[f,:]
+        for i in xrange(n_maxiter):
+            v_sp_db_sm = spectral_smoothing_rceps(v_sp_db[None,:], nc_total=ncoeffs, fade_to_total=0.7)[0]
+
+            # Debug:
+            if False:
+                from libplot import lp
+                lp.figure(1)
+                lp.plot(m_sp_db[f,:], '.-b')
+                lp.plot(v_sp_db, '.-r')
+                lp.plot(v_sp_db_sm, '.-g')
+                lp.grid()
+
+            if np.mean(np.abs(v_sp_db - v_sp_db_sm)) < thres_db:
+                break
+
+            v_sp_db = np.maximum(v_sp_db, v_sp_db_sm)
+
+        m_sp_db_env[f,:] = v_sp_db_sm
+
+    if in_type=='db':
+        m_sp_env = m_sp_db_env
+    elif in_type=='abs':
+        m_sp_env = db(m_sp_db_env, b_inv=True)
+    elif in_type=='log':
+        m_sp_env = (np.log(10.0) / 20.0) * m_sp_db_env
+
+    return m_sp_env
+
 #-------------------------------------------------------------------------------
 def gen_mask_simple(v_voi, nbins, cutoff_bin):
     '''
@@ -86,7 +136,7 @@ def gen_non_symmetric_win(left_len, right_len, win_func):
 # generated centered assymetric window:
 # If totlen is even, it is assumed that the center is the first element of the second half of the vector.
 # TODO: case win_func == None
-def gen_centr_win(winlen_l, winlen_r, totlen, win_func=None):
+def gen_centr_win(winlen_l, winlen_r, totlen, win_func=None, b_fill_w_bound_val=False):
    
     v_win_shrt = gen_non_symmetric_win(winlen_l, winlen_r, win_func)  
     win_shrt_len = len(v_win_shrt)
@@ -95,6 +145,9 @@ def gen_centr_win(winlen_l, winlen_r, totlen, win_func=None):
     nzeros_l = nx_cntr - winlen_l    
     
     v_win = np.zeros(totlen)
+    if b_fill_w_bound_val:
+        v_win += v_win_shrt[0]
+
     v_win[nzeros_l:nzeros_l+win_shrt_len] = v_win_shrt
     return v_win
 

@@ -21,6 +21,15 @@ import warnings
 # BODY
 #==============================================================================
 
+def raised_hanning(length, att=1.0):
+    '''
+    att: Attenuation [0,1]
+    '''
+    v_win = att * (np.hanning(length))
+    v_win = (1 - att) + v_win
+    return v_win
+
+
 def ola(m_frm, v_pm, win_func=None):
 
     v_pm = v_pm.astype(int)
@@ -36,6 +45,10 @@ def ola(m_frm, v_pm, win_func=None):
             #g = m_frm[i,:].copy()
             v_win = la.gen_centr_win(v_shift[i], v_shift[i+1], frmlen, win_func=win_func)
             m_frm[i,:] *= v_win
+
+            if False:
+                from libplot import lp
+                lp.figure(); lp.plot(v_win); lp.grid()
 
         # Add frames:
         v_sig[strt:(strt+frmlen)] += m_frm[i,:]
@@ -160,11 +173,95 @@ def analysis_with_del_comp_from_est_file(v_in_sig, est_file, fs, nFFT=None, win_
     return m_sp, m_ph, v_shift, v_voi, m_frms, m_fft
 
 
+#==============================================================================
+# From (after) 'analysis_with_del_comp':
+# new: returns voi/unv decision.
+def analysis_with_del_comp_from_pm_type2(v_in_sig, fs, v_pm_smpls, v_voi, fft_len=None,
+                                         win_func=np.hanning, nwin_per_pitch_period=0.5):
+
+    # If the FFT length is not provided, some safe values are assumed.
+    # You can try decreasing the fft length if wanted.
+
+    if fft_len is None:
+        fft_len = define_fft_len(fs)
+
+    # Generate intermediate epocs:
+    v_pm_smpls_defi = v_pm_smpls
+    if nwin_per_pitch_period==0.5: # original design
+        pass
+
+    elif nwin_per_pitch_period>=1.0:
+        n_eps_per_pitch_per = int((nwin_per_pitch_period * 2))
+
+        v_pm_smpls_diff = np.diff(v_pm_smpls)
+        v_pm_smpls_step = v_pm_smpls_diff / float(n_eps_per_pitch_per)
+        m_pm_smpls_step = np.tile(v_pm_smpls_step, (n_eps_per_pitch_per, 1))
+        m_pm_smpls_step = np.multiply(m_pm_smpls_step, np.arange(n_eps_per_pitch_per)[:,None])
+        m_pm_smpls_step = np.add(m_pm_smpls_step, v_pm_smpls[:-1])
+        v_pm_smpls_defi = m_pm_smpls_step.flatten(order='F')
+
+    # Windowing:---------------------------------------------------------------
+    l_frms, v_lens, v_pm_plus, v_shift, v_rights = windowing(v_in_sig, v_pm_smpls_defi, win_func=win_func)
+
+    # FFT:---------------------------------------------------------------------
+    #len_max = np.max(v_lens) # max frame length in file
+    #if fft_len < len_max:
+    #    warnings.warn("fft_len (%d) is shorter than the maximum detected frame length (%d). " \
+    #                  + "This issue is not very critical, but if it occurs often (e.g., more than 3 times per utterance), " \
+    #                  + "please increase de FFT length." % (fft_len,len_max))
+
+    n_frms = len(l_frms)
+    m_frms = np.zeros((n_frms, fft_len))
+
+    # For paper:--------------------------------
+    #m_frms_orig = np.zeros((n_frms, fft_len))
+    # ------------------------------------------
+    warnmess  = "fft_len (%d) is shorter than the current detected frame length (%d). "
+    warnmess += "This issue is not very critical, but if it occurs often "
+    warnmess += "(e.g., more than 3 times per utterance), please increase de FFT length."
+    v_gain = np.zeros(n_frms)
+    fft_len_half = fft_len / 2 + 1
+    for f in xrange(n_frms):
+
+
+        if v_lens[f]<=fft_len:
+            m_frms[f,0:v_lens[f]] = l_frms[f]
+        else:
+            m_frms[f,:] = l_frms[f][:fft_len]
+            warnings.warn(warnmess % (fft_len, v_lens[f]))
+
+        # un-delay the signal:
+        v_curr_frm  = m_frms[f,:]
+
+        # For paper:----------------------------
+        #m_frms_orig[f,:] = v_curr_frm
+        # --------------------------------------
+        m_frms[f,:] = np.hstack((v_curr_frm[v_shift[f]:], v_curr_frm[0:v_shift[f]]))
+
+        # Gain:
+        if v_voi[f]==1: # voiced case:
+            v_gain[f] = np.max(np.abs(m_frms[f,:fft_len_half]))
+        else: # unv case:
+            #v_gain[f] = np.sqrt(np.mean(l_frms[f]**2)) # TODO: Improve (remove dc)
+            v_gain[f] = np.std(l_frms[f])
+
+    m_fft = np.fft.fft(m_frms)
+    m_sp  = np.absolute(m_fft)
+    m_ph  = np.angle(m_fft)
+
+    # Remove redundant second half:--------------------------------------------
+    m_sp  = la.remove_hermitian_half(m_sp)
+    m_ph  = la.remove_hermitian_half(m_ph)
+    m_fft = la.remove_hermitian_half(m_fft)
+
+    return m_fft, v_shift, v_gain
+
 
 #==============================================================================
 # From (after) 'analysis_with_del_comp':
 # new: returns voi/unv decision.
-def analysis_with_del_comp_from_pm(v_in_sig, fs, v_pm_smpls, fft_len=None, win_func=np.hanning, nwin_per_pitch_period=0.5):
+def analysis_with_del_comp_from_pm(v_in_sig, fs, v_pm_smpls, fft_len=None,
+                                    win_func=np.hanning, nwin_per_pitch_period=0.5):
 
     # If the FFT length is not provided, some safe values are assumed.
     # You can try decreasing the fft length if wanted.
@@ -220,9 +317,7 @@ def analysis_with_del_comp_from_pm(v_in_sig, fs, v_pm_smpls, fft_len=None, win_f
         # For paper:----------------------------
         #m_frms_orig[f,:] = v_curr_frm        
         # --------------------------------------
-                   
-        m_frms[f,:] = np.hstack((v_curr_frm[v_shift[f]:], v_curr_frm[0:v_shift[f]]))         
-
+        m_frms[f,:] = np.hstack((v_curr_frm[v_shift[f]:], v_curr_frm[0:v_shift[f]]))
                    
     m_fft = np.fft.fft(m_frms)
     m_sp  = np.absolute(m_fft) 
@@ -621,6 +716,185 @@ def synthesis_from_compressed(m_mag_mel_log, m_real_mel, m_imag_mel, v_lf0, fs, 
     v_syn_sig = signal.lfilter(bc, ac, v_syn_sig)
 
     return v_syn_sig   
+
+
+#==============================================================================
+# NOTE: "v_frm_locs_smpls" are the locations of the target frames (centres) in the constant rate data to sample from.
+# This function should be used along with the function "interp_from_const_to_variable_rate"
+def get_shifts_and_frm_locs_from_const_shifts(v_shift_c_rate, frm_rate_ms, fs, interp_type='linear'):
+
+    # Interpolation in reverse:
+    n_c_rate_frms      = np.size(v_shift_c_rate,0)
+    frm_rate_smpls     = fs * frm_rate_ms / 1000
+
+    v_c_rate_centrs_smpls = frm_rate_smpls * np.arange(1,n_c_rate_frms+1)
+    f_interp   = interpolate.interp1d(v_c_rate_centrs_smpls, v_shift_c_rate, axis=0, kind=interp_type)
+    v_shift_vr = np.zeros(n_c_rate_frms * 2) # * 2 just in case, Improve these!
+    v_frm_locs_smpls = np.zeros(n_c_rate_frms * 2)
+    curr_pos_smpl = v_c_rate_centrs_smpls[-1]
+    for i_vr in xrange(len(v_shift_vr)-1,0, -1):
+        #print(i_vr)
+        v_frm_locs_smpls[i_vr] = curr_pos_smpl
+        try:
+            v_shift_vr[i_vr] = f_interp(curr_pos_smpl)
+        except ValueError:
+            v_frm_locs_smpls = v_frm_locs_smpls[i_vr+1:]
+            v_shift_vr  = v_shift_vr[i_vr+1:]
+            break
+
+        curr_pos_smpl = curr_pos_smpl - v_shift_vr[i_vr]
+
+    return v_shift_vr, v_frm_locs_smpls
+
+
+def synthesis_from_compressed_type2(m_mag_mel_log, m_real_mel, m_imag_mel, v_lf0, fs, fft_len=None, hf_slope_coeff=1.0, b_voi_ap_win=True, b_norm_mag=False, v_lgain=None, const_rate_ms=-1.0):
+
+    # Extract gain:
+    '''
+    if b_norm_mag:
+
+        v_lgain = m_mag_mel_log[:,0].copy()
+        v_gain  = np.exp(v_lgain)
+        m_mag_mel_log[:,0] = m_mag_mel_log[:,1]
+    '''
+
+    # Constants for spectral crossfade (in Hz):
+    crsf_cf, crsf_bw = define_crossfade_params(fs)
+    alpha = define_alpha(fs)
+    if fft_len==None:
+        fft_len = define_fft_len(fs)
+
+    fft_len_half = fft_len / 2 + 1
+    v_f0 = np.exp(v_lf0)
+    nfrms, ncoeffs_mag = m_mag_mel_log.shape
+    ncoeffs_comp = m_real_mel.shape[1]
+
+    if b_norm_mag:
+        m_mag_mel_log = m_mag_mel_log + v_lgain[:,None]
+        '''
+        cf_freq = 30.0 # Hz
+        cf_bin  = lu.round_to_int(cf_freq * fft_len / float(fs))
+        m_mag[:,:(cf_bin+1)] = 0.0
+        '''
+
+    # Magnitude mel-unwarp:----------------------------------------------------
+    m_mag = np.exp(la.sp_mel_unwarp(m_mag_mel_log, fft_len_half, alpha=alpha, in_type='log'))
+
+
+    # Complex mel-unwarp:------------------------------------------------------
+    f_intrp_real = interpolate.interp1d(np.arange(ncoeffs_comp), m_real_mel, kind='nearest', fill_value='extrapolate')
+    f_intrp_imag = interpolate.interp1d(np.arange(ncoeffs_comp), m_imag_mel, kind='nearest', fill_value='extrapolate')
+
+    m_real_mel = f_intrp_real(np.arange(ncoeffs_mag))
+    m_imag_mel = f_intrp_imag(np.arange(ncoeffs_mag))
+
+    m_real = la.sp_mel_unwarp(m_real_mel, fft_len_half, alpha=alpha, in_type='log')
+    m_imag = la.sp_mel_unwarp(m_imag_mel, fft_len_half, alpha=alpha, in_type='log')
+
+    # If data is constant rate:------------------------------------------------
+    v_shift = f0_to_shift(v_f0, fs)
+    if const_rate_ms>0.0:
+        #v_shift = f0_to_shift(v_f0, fs)
+        v_shift, v_frm_locs_smpls = get_shifts_and_frm_locs_from_const_shifts(v_shift, const_rate_ms, fs, interp_type='linear')
+        m_mag  = interp_from_const_to_variable_rate(m_mag, v_frm_locs_smpls, const_rate_ms, fs, interp_type='linear')
+        m_real = interp_from_const_to_variable_rate(m_real, v_frm_locs_smpls, const_rate_ms, fs, interp_type='linear')
+        m_imag = interp_from_const_to_variable_rate(m_imag, v_frm_locs_smpls, const_rate_ms, fs, interp_type='linear')
+        v_voi  = interp_from_const_to_variable_rate(v_f0>0.0, v_frm_locs_smpls, const_rate_ms, fs, interp_type='linear') > 0.5
+        v_f0   = shift_to_f0(v_shift, v_voi, fs, out='f0', b_smooth=False)
+        nfrms  = v_shift.size
+
+    # Noise Gen:---------------------------------------------------------------
+    v_shift = v_shift.astype(int)
+    v_pm   = la.shift_to_pm(v_shift)
+
+    ns_len = v_pm[-1] + (v_pm[-1] - v_pm[-2])
+    v_ns   = np.random.uniform(-1, 1, ns_len)
+
+    # Noise Windowing:---------------------------------------------------------
+    l_ns_win_funcs = [ np.hanning ] * nfrms
+    vb_voi = v_f0 > 1 # case voiced  (1 is used for safety)
+    if b_voi_ap_win:
+        for i in xrange(nfrms):
+            if vb_voi[i]:
+                l_ns_win_funcs[i] = voi_noise_window
+
+    l_frm_ns, v_lens, v_pm_plus, v_shift_dummy, v_rights = windowing(v_ns, v_pm, win_func=l_ns_win_funcs)   # Checkear!!
+
+    m_frm_ns  = la.frm_list_to_matrix(l_frm_ns, v_shift, fft_len)
+    m_frm_ns  = np.fft.fftshift(m_frm_ns, axes=1)
+    m_ns_cmplx = la.remove_hermitian_half(np.fft.fft(m_frm_ns))
+
+    # AP-Mask:-----------------------------------------------------------------
+    # Norm gain:
+    m_ns_mag  = np.absolute(m_ns_cmplx)
+    rms_noise = np.sqrt(np.mean(m_ns_mag**2)) # checkear!!!!
+    m_ap_mask = np.ones(m_ns_mag.shape)
+    m_ap_mask = m_mag * m_ap_mask / rms_noise
+
+    m_zeros = np.zeros((nfrms, fft_len_half))
+    m_ap_mask[vb_voi,:] = la.spectral_crossfade(m_zeros[vb_voi,:], m_ap_mask[vb_voi,:], crsf_cf, crsf_bw, fs, freq_scale='hz')
+
+    # HF - enhancement:
+    v_slope  = np.linspace(1, hf_slope_coeff, num=fft_len_half)
+    m_ap_mask[~vb_voi,:] = m_ap_mask[~vb_voi,:] * v_slope
+
+    # Det-Mask:----------------------------------------------------------------
+    m_det_mask = m_mag
+    m_det_mask[~vb_voi,:] = 0
+    m_det_mask[vb_voi,:]  = la.spectral_crossfade(m_det_mask[vb_voi,:], m_zeros[vb_voi,:], crsf_cf, crsf_bw, fs, freq_scale='hz')
+
+    # Applying masks:----------------------------------------------------------
+    m_ap_cmplx  = m_ap_mask  * m_ns_cmplx
+    m_det_cmplx = m_real + m_imag * 1j
+
+    # Protection:
+    m_det_cmplx_abs = np.absolute(m_det_cmplx)
+    m_det_cmplx_abs[m_det_cmplx_abs==0.0] = 1.0
+
+    m_det_cmplx = m_det_mask * m_det_cmplx / m_det_cmplx_abs
+
+    # bin width: bw=11.71875 Hz
+    # To Time domain:-------------------------------------------------------------
+    m_syn_cmplx = la.add_hermitian_half(m_ap_cmplx + m_det_cmplx, data_type='complex')
+    m_syn_td    = np.fft.ifft(m_syn_cmplx).real
+    m_syn_td    = np.fft.fftshift(m_syn_td, axes=1)
+
+    # Apply window anti-ringing:----------------------------------------------------
+    frmlen = m_syn_td.shape[1]
+    v_shift_ext = np.r_[v_shift[0], v_shift, v_shift[-1], v_shift[-1]] # recover first shift (estimate)
+    for nxf in xrange(nfrms):
+        v_win = la.gen_centr_win(v_shift_ext[nxf]+v_shift_ext[nxf+1], v_shift_ext[nxf+2]+v_shift_ext[nxf+3], frmlen, win_func=raised_hanning, b_fill_w_bound_val=True)
+        m_syn_td[nxf,:] *= v_win
+
+    # Apply gain:
+    '''
+    if b_norm_mag:
+        v_gain = np.exp(v_lgain)
+        v_shift_ext2 = np.r_[v_shift, v_shift[-1]]
+        nx_cntr  = np.floor(frmlen / 2.0).astype(int)
+        for nxf in xrange(nfrms):
+            curr_frm = m_syn_td[nxf,:]
+
+            if vb_voi[nxf]==1: #Voiced case
+                curr_gain = np.max(np.abs(curr_frm))
+                m_syn_td[nxf,:] = curr_frm * (v_gain[nxf]/curr_gain)
+            else: #unvoiced case
+                curr_gain = np.std(curr_frm[(nx_cntr-v_shift_ext2[nxf]):(nx_cntr+v_shift_ext2[nxf+1])])
+                #m_syn_td[nxf,:] = curr_frm * v_gain[nxf]
+                #m_syn_td[nxf,:] = curr_frm * (v_gain[nxf]/curr_gain)
+    '''
+
+    # PSOLA:--------------------------------------------------------------------------
+    v_syn_sig = ola(m_syn_td, v_pm, win_func=None)
+
+    # HPF:---------------------------------------------------------------------
+    fc    = 60
+    order = 4
+    fc_norm   = fc / (fs / 2.0)
+    bc, ac    = signal.ellip(order,0.5 , 80, fc_norm, btype='highpass')
+    v_syn_sig = signal.lfilter(bc, ac, v_syn_sig)
+
+    return v_syn_sig
 
 #==============================================================================
 # v2: Improved phase generation. 
@@ -1350,18 +1624,24 @@ def f0_to_shift(v_f0_in, fs, unv_frm_rate_ms=5):
     v_shift = fs / v_f0
     
     return v_shift     
-    
+
+
 #============================================================================== 
-def interp_from_variable_to_const_frm_rate(m_data, v_pm_smpls, const_rate_ms, fs, interp_type='linear') :
+def interp_from_variable_to_const_frm_rate(m_data, v_pm_smpls, const_rate_ms, fs, interp_type='linear'):
     
+    dp = lu.DimProtect(m_data)
+
     dur_total_smpls  = v_pm_smpls[-1]
     const_rate_smpls = fs * const_rate_ms / 1000
     #cons_frm_rate_frm_len = 2 * frm_rate_smpls # This assummed according to the Merlin code. E.g., frame_number = int((end_time - start_time)/50000)
-    v_c_rate_centrs_smpls = np.arange(const_rate_smpls, dur_total_smpls, const_rate_smpls) 
-  
+    v_c_rate_centrs_smpls = np.arange(const_rate_smpls, dur_total_smpls, const_rate_smpls)
+
     # Interpolation m_spmgc:         
-    f_interp = interpolate.interp1d(v_pm_smpls, m_data, axis=0, kind=interp_type)  
+    f_interp = interpolate.interp1d(np.r_[0, v_pm_smpls], np.vstack((m_data[0,:], m_data)), axis=0, kind=interp_type)
     m_data_const_rate = f_interp(v_c_rate_centrs_smpls) 
+
+    dp.end(m_data_const_rate)
+
 
     return m_data_const_rate
 
@@ -1377,35 +1657,6 @@ def interp_from_const_to_variable_rate(m_data, v_frm_locs_smpls, frm_rate_ms, fs
     m_data_intrp = f_interp(v_frm_locs_smpls) 
     
     return m_data_intrp 
-
-#==============================================================================
-# NOTE: "v_frm_locs_smpls" are the locations of the target frames (centres) in the constant rate data to sample from.
-# This function should be used along with the function "interp_from_const_to_variable_rate"
-def get_shifts_and_frm_locs_from_const_shifts(v_shift_c_rate, frm_rate_ms, fs, interp_type='linear'):
-        
-    # Interpolation in reverse:
-    n_c_rate_frms      = np.size(v_shift_c_rate,0)                
-    frm_rate_smpls     = fs * frm_rate_ms / 1000
-    
-    v_c_rate_centrs_smpls = frm_rate_smpls * np.arange(1,n_c_rate_frms+1)
-    f_interp   = interpolate.interp1d(v_c_rate_centrs_smpls, v_shift_c_rate, axis=0, kind=interp_type)            
-    v_shift_vr = np.zeros(n_c_rate_frms * 2) # * 2 just in case, Improve these!
-    v_frm_locs_smpls = np.zeros(n_c_rate_frms * 2)
-    curr_pos_smpl = v_c_rate_centrs_smpls[-1]
-    for i_vr in xrange(len(v_shift_vr)-1,0, -1):        
-        #print(i_vr)
-        v_frm_locs_smpls[i_vr] = curr_pos_smpl            
-        try:                
-            v_shift_vr[i_vr] = f_interp(curr_pos_smpl)
-        except ValueError:
-            v_frm_locs_smpls = v_frm_locs_smpls[i_vr+1:]                
-            v_shift_vr  = v_shift_vr[i_vr+1:]
-            break
-        
-        curr_pos_smpl = curr_pos_smpl - v_shift_vr[i_vr]
-        
-    return v_shift_vr, v_frm_locs_smpls
-
 
 def post_filter_backup_old(m_mag_mel_log):
 
@@ -1573,6 +1824,82 @@ def write_featfile(m_data, out_dir, filename):
     lu.write_binfile(m_data, filepath)
     return
 
+def analysis_lossless_type2(wav_file, fft_len=None, out_dir=None):
+
+    # Read file:
+    v_sig, fs = sf.read(wav_file)
+
+    # Epoch detection:
+    est_file = lu.ins_pid('temp.est')
+    la.reaper(wav_file, est_file)
+    v_pm_sec, v_voi = la.read_reaper_est_file(est_file, check_len_smpls=len(v_sig), fs=fs)
+    os.remove(est_file)
+    v_pm_smpls = v_pm_sec * fs
+
+    # Magnitude analysis:----------------------------------------------------------------
+    v_nx_even = np.arange(0, v_pm_smpls.size, 2)
+    v_nx_odd  = np.arange(1, v_pm_smpls.size, 2)
+    m_fft_even, v_shift_even = analysis_with_del_comp_from_pm(v_sig, fs, v_pm_smpls[v_nx_even], fft_len=fft_len)
+    m_fft_odd , v_shift_odd  = analysis_with_del_comp_from_pm(v_sig, fs, v_pm_smpls[v_nx_odd] , fft_len=fft_len)
+
+    nfrms     = m_fft_even.shape[0] + m_fft_odd.shape[0]
+    nfft_half = m_fft_even.shape[1]
+    m_fft     = np.zeros((nfrms, nfft_half), dtype=np.complex)
+    m_fft[v_nx_even,:] = m_fft_even
+    m_fft[v_nx_odd,:]  = m_fft_odd
+    m_fft = m_fft[1:,:]
+
+    v_shift = la.pm_to_shift(v_pm_smpls[1:])
+    #v_shift = v_shift[1:]
+
+    # Debug:
+    if False:
+        from libplot import lp
+        lp.plotm(la.db(np.absolute(m_fft)))
+
+    # Getting high-ress magphase feats:
+    m_mag_long, m_real_long, m_imag_long, v_f0_long = compute_lossless_feats(m_fft, v_shift, v_voi[1:], fs)
+    #m_mag_long = np.absolute(m_fft)
+
+    # True envelope:
+    m_mag_env = la.true_envelope(m_mag_long, in_type='abs', ncoeffs=600, thres_db=0.1)
+
+    # Phase analysis:------------------------------------------------------------------------
+    m_fft_phase, v_shift_phase, v_gain = analysis_with_del_comp_from_pm_type2(v_sig, fs, v_pm_smpls, v_voi, fft_len=fft_len)
+    m_mag, m_real, m_imag, v_f0 = compute_lossless_feats(m_fft_phase, v_shift_phase, v_voi, fs)
+    m_real = m_real[1:]
+    m_imag = m_imag[1:]
+    v_f0   = v_f0[1:]
+    v_gain = v_gain[1:]
+
+    if False: # phase
+        from libplot import lp
+        nx=202; lp.figure(); lp.plot(m_real[nx,:]); lp.plot(m_real_long[nx,:]); lp.grid()
+
+    if False:
+        from libplot import lp
+        m_mag_log = np.log(m_mag_long)
+        m_mag_env_log = np.log(m_mag_env)
+        lp.plotm(m_mag_log)
+        lp.plotm(m_mag_env_log)
+        lp.plotm(np.log(m_mag))
+        lp.plotm(m_real)
+        nx=201; lp.figure(); lp.plot(m_mag_log[nx,:]); lp.plot(m_mag_env_log[nx,:]); lp.plot(0.0 + np.log(m_mag[nx,:])); lp.grid()
+        nx=101; lp.figure(); lp.plot(m_real[nx,:]); lp.grid()
+
+    # If output directory provided, features are written to disk:
+    if type(out_dir) is str:
+        file_id = os.path.basename(wav_file).split(".")[0]
+        write_featfile(m_mag_env, out_dir, file_id + '.mag')
+        write_featfile(m_real , out_dir, file_id + '.real')
+        write_featfile(m_imag , out_dir, file_id + '.imag')
+        write_featfile(v_f0   , out_dir, file_id + '.f0')
+        write_featfile(v_shift, out_dir, file_id + '.shift')
+        return
+
+    return m_mag_env, m_real, m_imag, v_f0, fs, v_shift, v_gain
+
+
 def analysis_lossless(wav_file, fft_len=None, out_dir=None):
 
     # Read file:
@@ -1628,6 +1955,116 @@ def analysis_compressed(wav_file, fft_len=None, out_dir=None, nbins_mel=60, nbin
         return
 
     return m_mag_mel_log, m_real_mel, m_imag_mel, v_lf0_smth, v_shift, fs, fft_len
+
+
+def compute_imag_from_real(start_sign, v_real):
+    '''
+    NOT FINISHED (ongoing work!!)
+    '''
+
+    nbins = v_real.size
+    v_imag = np.zeros(nbins) # v_imag[0] = 0 always
+    v_imag[1] = start_sign * np.sqrt(1.0 - (v_real[1]**2))
+
+    #curr_sign = start_sign
+    for nxb in xrange(2,nbins):
+        prev_diff = v_imag[nxb-1] - v_imag[nxb-2]
+
+        curr_val_pos =  np.sqrt(1.0 - (v_real[nxb]**2))
+        curr_val_neg = -curr_val_pos
+
+        curr_diff_pos = curr_val_pos - v_imag[nxb-1]
+        curr_diff_neg = curr_val_neg - v_imag[nxb-1]
+
+        if np.abs(curr_diff_pos-prev_diff)<=np.abs(curr_diff_neg-prev_diff):
+            v_imag[nxb] = curr_val_pos
+        else:
+            v_imag[nxb] = curr_val_neg
+
+        #v_imag[nxb] = curr_sign * curr_val
+
+    return v_imag
+
+
+def analysis_compressed_type2(wav_file, fft_len=None, out_dir=None, nbins_mel=60, nbins_phase=45, b_norm_mag=False, const_rate_ms=-1.0):
+
+    # Analysis:
+    m_mag, m_real, m_imag, v_f0, fs, v_shift, v_gain = analysis_lossless_type2(wav_file, fft_len=fft_len)
+
+    # To constant rate:
+    if const_rate_ms>0.0:
+        v_pm_smpls = la.shift_to_pm(v_shift)
+        m_mag  = interp_from_variable_to_const_frm_rate(m_mag,  v_pm_smpls, const_rate_ms, fs, interp_type='linear')
+        m_real = interp_from_variable_to_const_frm_rate(m_real, v_pm_smpls, const_rate_ms, fs, interp_type='linear')
+        m_imag = interp_from_variable_to_const_frm_rate(m_imag, v_pm_smpls, const_rate_ms, fs, interp_type='linear')
+        #g = interp_from_variable_to_const_frm_rate(v_gain, v_pm_smpls, const_rate_ms, fs, interp_type='linear')
+        v_gain = interp_from_variable_to_const_frm_rate(v_gain, v_pm_smpls, const_rate_ms, fs, interp_type='linear')
+
+        # f0:
+        v_voi = v_f0>1.0
+        v_f0  = interp_from_variable_to_const_frm_rate(np.r_[ v_f0[v_voi][0],v_f0[v_voi], v_f0[v_voi][-1] ], np.r_[ 0, v_pm_smpls[v_voi], v_pm_smpls[-1] ], const_rate_ms, fs, interp_type='linear').squeeze()
+        v_voi = interp_from_variable_to_const_frm_rate(v_voi, v_pm_smpls, const_rate_ms, fs, interp_type='linear')>0.5
+        v_f0  *= v_voi # Double check this. At the beginning of voiced segments.
+
+
+
+    # Debug:
+    # ONGOING WORK (NOT FINISHED)
+    #nx=0
+    #start_sign = -1.0
+    #v_imag_ext = compute_imag_from_real(start_sign, m_real[nx,:])
+    #m_imag_ext = start_sign * np.sqrt(1.0 - (m_real**2))
+
+    if False:
+
+        from libplot import lp
+        nx=0; lp.figure(); lp.plot(m_real[nx,:], '.-'); lp.plot(m_imag[nx,:], '.-'); lp.plot(v_imag_ext, '.-'); lp.grid()
+        nx=0; lp.figure(); lp.plot(m_real[nx,:], '.-'); lp.plot(m_imag[nx,:], '.-'); lp.plot(m_imag_ext[nx,:], '.-'); lp.grid()
+        nx=0; lp.figure(); lp.plot(np.diff(m_imag[nx,:]), '.-'); lp.plot(np.diff(m_imag_ext[nx,:]), '.-'); lp.grid()
+        nx=0; lp.figure(); lp.plot(np.diff(np.diff(m_imag[nx,:])), '.-'); lp.plot(np.diff(np.diff(m_imag_ext[nx,:])), '.-'); lp.grid()
+        nx=0; lp.figure(); lp.plot(m_real[nx,:]**2+m_imag[nx,:]**2, '.-'); lp.grid()
+
+    # Norm:
+    #m_mag_log = la.log(m_mag)
+    #m_mag_log_norm = (m_mag_log.T - np.mean(m_mag_log, axis=1)).T
+
+    if False:
+        from libplot import lp
+        lp.plotm(m_mag_log)
+        lp.plotm(m_mag_log_norm)
+        nx=312; lp.figure(); lp.plot(m_mag_log[nx:nx+3,:].T); lp.grid()
+        nx=312; lp.figure(); lp.plot(m_mag_log_norm[nx:nx+3,:].T); lp.grid()
+
+    # Formatting for Acoustic Modelling:
+    m_mag_mel_log, m_real_mel, m_imag_mel, v_lf0_smth = format_for_modelling(m_mag, m_real, m_imag, v_f0, fs, nbins_mel=nbins_mel, nbins_phase=nbins_phase)
+    fft_len = 2*(np.size(m_mag,1) - 1)
+    v_lgain = la.log(v_gain)
+
+    if b_norm_mag:
+        #v_gain  = np.mean((np.hstack((m_mag, m_mag[:,1:-1]))**2), axis=1)
+        #v_lgain = la.log(v_gain)
+
+        v_mean = np.mean(m_mag_mel_log, axis=1)
+        m_mag_mel_log = (m_mag_mel_log.T - v_mean).T
+        v_lgain  = v_mean
+        #v_lgain = la.log(v_gain)
+
+        '''
+        v_mean = np.mean(m_mag_mel_log[:,1:], axis=1)
+        m_mag_mel_log = (m_mag_mel_log[:,1:].T - v_mean).T
+        m_mag_mel_log = np.hstack((v_lgain[:,None], m_mag_mel_log))
+        '''
+    # Save features:
+    if type(out_dir) is str:
+        file_id = os.path.basename(wav_file).split(".")[0]
+        write_featfile(m_mag_mel_log, out_dir, file_id + '.mag')
+        write_featfile(m_real_mel   , out_dir, file_id + '.real')
+        write_featfile(m_imag_mel   , out_dir, file_id + '.imag')
+        write_featfile(v_lf0_smth   , out_dir, file_id + '.lf0')
+        write_featfile(v_shift      , out_dir, file_id + '.shift')
+        return
+
+    return m_mag_mel_log, m_real_mel, m_imag_mel, v_lf0_smth, v_shift, fs, fft_len, v_lgain
 
 
 def synthesis_from_acoustic_modelling(in_feats_dir, filename_token, out_syn_dir, nbins_mel, nbins_phase, fs, fft_len=None, b_postfilter=True):

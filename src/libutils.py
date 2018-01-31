@@ -155,18 +155,24 @@ def mkdir(l_dir):
             os.mkdir(directory)
     return
 
+# Checks if data is mutable:
+def is_mutable(data):
+    return hasattr(data, '__setitem__')
+
+# Protects dimensionality of arrays:
 class DimProtect(object):
     def __init__(self, *args):
         self.orig_ndim = args[0].ndim # dim depends on the first array passed
         if self.orig_ndim==1:
             for data in args:
-                data.resize((1, data.size))
+                #data.resize((1, data.size))
+                data.resize((data.size,1))
         return
 
     def end(self, *args):
         if self.orig_ndim==1:
             for data in args:
-                data.resize(data.shape[1])
+                data.resize((data.shape[0],))
         return
 
 def add_rel_path(rel_path):
