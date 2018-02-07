@@ -26,7 +26,7 @@ import magphase as mp
 
 def synthesis(in_feats_dir, filename_token, out_syn_dir, nbins_mel, nbins_phase, fs, b_postfilter):
     print('\nGenerating wavefile: ' + filename_token + '................................')
-    mp.synthesis_from_acoustic_modelling(in_feats_dir, filename_token, out_syn_dir, nbins_mel, nbins_phase, fs, b_postfilter)
+    mp.synthesis_from_acoustic_modelling(in_feats_dir, filename_token, out_syn_dir, nbins_mel, nbins_phase, fs, b_postfilter=b_postfilter)
     return
 
 if __name__ == '__main__':  
