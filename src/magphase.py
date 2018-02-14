@@ -761,7 +761,7 @@ def synthesis_from_compressed_type2(m_mag_mel_log, m_real_mel, m_imag_mel, v_lf0
     ncoeffs_comp = m_real_mel.shape[1]
 
     # Debug:
-    b_norm_mag = False
+    b_norm_mag = False # CHECK THIS. ONLY FOR DEBUG!!
 
     if False:
         from libplot import lp
@@ -776,6 +776,7 @@ def synthesis_from_compressed_type2(m_mag_mel_log, m_real_mel, m_imag_mel, v_lf0
         #m_mag_mel_log[:,0] = -8.0
         #m_mag_mel_log = m_mag_mel_log + v_lgain[:,None]
         m_mag_mel_log = m_mag_mel_log - v_lgain[:,None]
+
         '''
         cf_freq = 30.0 # Hz
         cf_bin  = lu.round_to_int(cf_freq * fft_len / float(fs))
@@ -2046,7 +2047,6 @@ def analysis_compressed_type2(wav_file, fft_len=None, out_dir=None, nbins_mel=60
     v_lgain = la.log(v_gain)
 
     if b_norm_mag:
-
         v_mean = np.mean(m_mag_mel_log[:,1:], axis=1)
         m_mag_mel_log = (m_mag_mel_log.T - v_mean).T
         v_lgain  = v_mean
@@ -2059,8 +2059,10 @@ def analysis_compressed_type2(wav_file, fft_len=None, out_dir=None, nbins_mel=60
         write_featfile(m_real_mel   , out_dir, file_id + '.real')
         write_featfile(m_imag_mel   , out_dir, file_id + '.imag')
         write_featfile(v_lf0_smth   , out_dir, file_id + '.lf0')
+
         if const_rate_ms<=0.0:
             write_featfile(v_shift  , out_dir, file_id + '.shift')
+
         return
 
     return m_mag_mel_log, m_real_mel, m_imag_mel, v_lf0_smth, v_shift, fs, fft_len, v_lgain

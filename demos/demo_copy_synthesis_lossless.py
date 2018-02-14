@@ -21,8 +21,8 @@ NOTES: This script was previously named demo_copy_synthesis_hi_res.py
 """
 
 import sys, os
-curr_dir = os.getcwd()
-sys.path.append(os.path.realpath(curr_dir + '/../src'))
+this_dir = os.getcwd()
+sys.path.append(os.path.realpath(this_dir + '/../src'))
 
 import libutils as lu
 import libaudio as la

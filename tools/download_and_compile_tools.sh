@@ -19,10 +19,21 @@ echo "Downloading REAPER:=======================================================
 git clone https://github.com/google/REAPER.git
 
 echo "Compiling REAPER:=========================================================="
-cd REAPER
-mkdir build   # In the REAPER top-level directory
-cd build
-cmake ..
-make
+(
+    cd REAPER
+    mkdir build   # In the REAPER top-level directory
+    cd build
+    cmake ..
+    make
+)
+# Remove unnecessary files:
+echo "Removing temporary files:=================================================="
+mkdir -p ./bin
+cp ./REAPER/build/reaper ./bin
+cp ./SPTK-3.9/build/bin/mcep ./bin
+
+rm -rf ./REAPER
+rm -rf ./SPTK-3.9
+
 
 echo "All tools successfully compiled!!"

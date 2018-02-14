@@ -18,8 +18,8 @@ If wanted, you can modify the input options and/or perform some modification to 
 extracted features before re-synthesis. See the main function below for details.
 """
 import sys, os
-curr_dir = os.getcwd()
-sys.path.append(os.path.realpath(curr_dir + '/../src'))
+this_dir = os.getcwd()
+sys.path.append(os.path.realpath(this_dir + '/../src'))
 import numpy as np
 import libutils as lu
 import libaudio as la
