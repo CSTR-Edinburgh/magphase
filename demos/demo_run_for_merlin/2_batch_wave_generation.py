@@ -35,13 +35,20 @@ if __name__ == '__main__':
     fs = 48000
 
     # INPUT:==============================================================================
+    '''
     files_scp     = '../data_48k/file_id.scp'     # List of file names (tokens). Format used by Merlin.
     in_feats_dir  = '../data_48k/params'          # Input directory that contains the predicted features.
     out_syn_dir   = '../data_48k/wavs_syn_merlin' # Where the synthesised waveform will be stored.
+    '''
+
+    files_scp     = '/home/s1373426/Felipe_Espic/Projects/DirectFFTWaveModelling/magphase_proj/merlin/egs/nick/nick_magphase_norm_type2_const_rate/file_id_list_syn_short.scp'     # List of file names (tokens). Format used by Merlin.
+    in_feats_dir  = '/home/s1373426/Felipe_Espic/Projects/DirectFFTWaveModelling/magphase_proj/merlin/egs/nick/nick_magphase_norm_type2_const_rate/gen/feed_forward_4_tanh'          # Input directory that contains the predicted features.
+    out_syn_dir   = '/home/s1373426/Felipe_Espic/Projects/DirectFFTWaveModelling/magphase_proj/merlin/egs/nick/nick_magphase_norm_type2_const_rate/gen/feed_forward_4_tanh' # Where the synthesised waveform will be stored.
+
 
     nbins_mel     = 60    # Number of Mel-scaled frequency bins.
     nbins_phase   = 45    # Number of Mel-scaled frequency bins kept for phase features (real and imag). It must be <= nbins_mel
-    b_postfilter  = True  # If True, the MagPhase vocoder post-filter is applied. Note: If you want to use the one included in Merlin, disable this one.
+    b_postfilter  = False  # If True, the MagPhase vocoder post-filter is applied. Note: If you want to use the one included in Merlin, disable this one.
 
     b_parallel    = False  # If True, it synthesises using all the available cores in parallel. If False, it just uses one core (slower).
 

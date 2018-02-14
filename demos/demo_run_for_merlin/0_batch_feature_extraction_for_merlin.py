@@ -30,37 +30,76 @@ import libutils as lu
 import magphase as mp
 
 
-def feat_extraction(in_wav_dir, file_name_token, out_feats_dir):
+def feat_extraction(in_wav_dir, file_name_token, out_feats_dir, magphase_type):
 
     # Display:
     print("\nAnalysing file: " + file_name_token + '.wav............................')
 
     # File setup:
     wav_file = os.path.join(in_wav_dir, file_name_token + '.wav')
-    mp.analysis_compressed(wav_file, out_dir=out_feats_dir)
 
+    if magphase_type=='type1':
+        mp.analysis_compressed_type1(wav_file, out_dir=out_feats_dir)
+    elif magphase_type=='type2':
+        mp.analysis_compressed_type2(wav_file, out_dir=out_feats_dir, const_rate_ms=5, b_norm_mag=True)
     return
 
 
 if __name__ == '__main__':  
     
     # INPUT:==============================================================================
+    '''
     files_scp     = '../data_48k/file_id.scp' # List of file names (tokens). Format used by Merlin.
     in_wav_dir    = '../data_48k/wavs_nat'    # Directory with the wavfiles to extract the features from.
     out_feats_dir = '../data_48k/params'      # Output directory that will contain the extracted features.
+    '''
 
+    # For Debug:
+    '''
+    files_scp     = '/home/s1373426/Dropbox/Education/UoE/Projects/fft_feats_DirectFFTWaveformModelling/magphase_proj/merlin/egs/slt_arctic/s3/database/slt_arctic_demo_data_magphase/merlin_baseline_practice/acoustic_data/file_id_list_demo.scp' # List of file names (tokens). Format used by Merlin.
+    in_wav_dir    = '/home/s1373426/Dropbox/Education/UoE/Projects/fft_feats_DirectFFTWaveformModelling/magphase_proj/merlin/egs/slt_arctic/s3/database/slt_arctic_demo_data_magphase/wav'    # Directory with the wavfiles to extract the features from.
+    out_feats_dir = '/home/s1373426/Dropbox/Education/UoE/Projects/fft_feats_DirectFFTWaveformModelling/magphase_proj/merlin/egs/slt_arctic/s3/database/slt_arctic_demo_data_magphase/feats'      # Output directory that will contain the extracted features.
+    magphase_type = 'type2'
+    '''
 
+    '''
+    files_scp     = '/home/s1373426/Felipe_Espic/Projects/DirectFFTWaveModelling/magphase_proj/merlin/egs/slt_arctic/s2_magphase_type2_var_rate/slt_arctic_demo_data_magphase/merlin_baseline_practice/acoustic_data/file_id_list_demo.scp' # List of file names (tokens). Format used by Merlin.
+    in_wav_dir    = '/home/s1373426/Felipe_Espic/Projects/DirectFFTWaveModelling/magphase_proj/merlin/egs/slt_arctic/s2_magphase_type2_var_rate/slt_arctic_demo_data_magphase/wav'    # Directory with the wavfiles to extract the features from.
+    out_feats_dir = '/home/s1373426/Felipe_Espic/Projects/DirectFFTWaveModelling/magphase_proj/merlin/egs/slt_arctic/s2_magphase_type2_var_rate/slt_arctic_demo_data_magphase/feats'      # Output directory that will contain the extracted features.
+    magphase_type = 'type2'
+    '''
+    '''
+    files_scp     = '/home/s1373426/Felipe_Espic/Projects/DirectFFTWaveModelling/magphase_proj/merlin/egs/nick/nick_magphase_type2_const_rate/file_id_list.scp' # List of file names (tokens). Format used by Merlin.
+    in_wav_dir    = '/home/s1373426/Felipe_Espic/Databases/Nick-Zhizheng_dnn_baseline_practice/data/wav'    # Directory with the wavfiles to extract the features from.
+    out_feats_dir = '/home/s1373426/Felipe_Espic/Projects/DirectFFTWaveModelling/magphase_proj/merlin/egs/nick/nick_magphase_type2_const_rate/data/acoustic_feats'      # Output directory that will contain the extracted features.
+    magphase_type = 'type2'
+    #'''
+
+    #'''
+    files_scp     = '/home/s1373426/Felipe_Espic/Projects/DirectFFTWaveModelling/magphase_proj/merlin/egs/nick/nick_magphase_type2_const_rate/file_id_list.scp' # List of file names (tokens). Format used by Merlin.
+    in_wav_dir    = '/home/s1373426/Felipe_Espic/Databases/Nick-Zhizheng_dnn_baseline_practice/data/wav'    # Directory with the wavfiles to extract the features from.
+    out_feats_dir = '/home/s1373426/Felipe_Espic/Projects/DirectFFTWaveModelling/magphase_proj/merlin/egs/nick/nick_magphase_norm_type2_const_rate/data/acoustic_feats'      # Output directory that will contain the extracted features.
+    magphase_type = 'type2'
+    #'''
+
+    '''
+    files_scp     = '/home/s1373426/Felipe_Espic/Projects/DirectFFTWaveModelling/magphase_proj/merlin/egs/nick/nick_magphase_type2_const_rate/file_id_list.scp' # List of file names (tokens). Format used by Merlin.
+    in_wav_dir    = '/home/s1373426/Felipe_Espic/Databases/Nick-Zhizheng_dnn_baseline_practice/data/wav'    # Directory with the wavfiles to extract the features from.
+    out_feats_dir = '/home/s1373426/Felipe_Espic/Projects/DirectFFTWaveModelling/magphase_proj/merlin/egs/nick/nick_magphase_type1_var_rate/data/acoustic_feats'      # Output directory that will contain the extracted features.
+    magphase_type = 'type1'
+    '''
     # FILES SETUP:========================================================================
     lu.mkdir(out_feats_dir)
     l_file_tokns = lu.read_text_file2(files_scp, dtype='string', comments='#').tolist()
 
     # MULTIPROCESSING EXTRACTION:==========================================================
-    lu.run_multithreaded(feat_extraction, in_wav_dir, l_file_tokns, out_feats_dir)
+    lu.run_multithreaded(feat_extraction, in_wav_dir, l_file_tokns, out_feats_dir, magphase_type)
 
     # For debug (Don't remove):
-    #for file_name_token in l_file_tokns:
-    #    feat_extraction(in_wav_dir, file_name_token, out_feats_dir)
-
+    '''
+    for file_name_token in l_file_tokns:
+        feat_extraction(in_wav_dir, file_name_token, out_feats_dir, magphase_type)
+    #'''
 
     print('Done!')
         
