@@ -26,8 +26,10 @@ MAGIC = -1.0E+10 # logarithm floor (the same as SPTK)
 def parse_config():
     global _reaper_bin, _sptk_mcep_bin
     _curr_dir = os.path.dirname(os.path.realpath(__file__))
-    _reaper_bin    = os.path.realpath(_curr_dir + '/../tools/REAPER/build/reaper')
-    _sptk_mcep_bin = os.path.realpath(_curr_dir + '/../tools/SPTK-3.9/build/bin/mcep')
+    #_reaper_bin    = os.path.realpath(_curr_dir + '/../tools/REAPER/build/reaper')
+    #_sptk_mcep_bin = os.path.realpath(_curr_dir + '/../tools/SPTK-3.9/build/bin/mcep')
+    _reaper_bin    = os.path.realpath(_curr_dir + '/../tools/bin/reaper')
+    _sptk_mcep_bin = os.path.realpath(_curr_dir + '/../tools/bin/mcep')
     _config = SafeConfigParser()
     _config.read(_curr_dir + '/../config.ini')
     #import ipdb; ipdb.set_trace()
