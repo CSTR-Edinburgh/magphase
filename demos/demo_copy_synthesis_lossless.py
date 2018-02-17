@@ -71,6 +71,7 @@ if __name__ == '__main__':
 
     # MODIFICATIONS:
     # You can modify the parameters here if wanted.
+    lu.write_binfile(m_mag, out_dir + '/' + lu.get_filename(wav_file_orig) + '_copy_syn_lossless.mag')
 
     # SYNTHESIS:
     print("Synthesising.................................................")

@@ -64,14 +64,19 @@ if __name__ == '__main__':
 
     # ANALYSIS:
     print("Analysing.....................................................")
-    m_mag_mel_log, m_real_mel, m_imag_mel, v_lf0, v_shift, fs, fft_len = mp.analysis_compressed(wav_file_orig)
+    m_mag_mel_log, m_real_mel, m_imag_mel, v_lf0, v_shift, fs, fft_len = mp.analysis_compressed_type1(wav_file_orig)
+
+    #m_mag_mel_log, m_real_mel, m_imag_mel, v_lf0, v_shift, fs, fft_len, v_lgain = mp.analysis_compressed_type2(wav_file_orig)
 
     # MODIFICATIONS:
     # You can modify the parameters here if wanted.
+    lu.write_binfile(m_mag_mel_log, out_dir + '/' + lu.get_filename(wav_file_orig) + '_copy_syn_low_dim.mag')
 
     # SYNTHESIS:
     print("Synthesising.................................................")
-    v_syn_sig = mp.synthesis_from_compressed(m_mag_mel_log, m_real_mel, m_imag_mel, v_lf0, fs, fft_len)
+    v_syn_sig = mp.synthesis_from_compressed_type1(m_mag_mel_log, m_real_mel, m_imag_mel, v_lf0, fs, fft_len)
+
+    #v_syn_sig = mp.synthesis_from_compressed_type2(m_mag_mel_log, m_real_mel, m_imag_mel, v_lf0, fs, fft_len)
 
     # SAVE WAV FILE:
     print("Saving wav file..............................................")
@@ -85,5 +90,6 @@ if __name__ == '__main__':
         lp.close('all')
 
     print('Done!')
+
 
 

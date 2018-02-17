@@ -612,20 +612,11 @@ def synthesis_with_del_comp__ph_enc__from_f0(m_spmgc, m_phs, m_phc, v_f0, nFFT, 
     return v_syn_sig
     
 #==============================================================================
-# v2: Improved phase generation. 
-# v3: specific window handling for aperiodic spectrum in voiced segments.
-# v4: Splitted window support
-# v5: Works with new fft params: mag_mel_log, real_mel, and imag_mel
-# If ph_hf_gen=='rand', generates random numbers for the phase above mvf
-# If ph_hf_gen=='template_mask', uses a phase template to fill the gaps given by the aperiodic mask.
-# If ph_hf_gen=='rand_mask' The same as above, but it uses random numbers instead of a template.
-# The aperiodic mask is computed (estimated) according to the total phase energy per frame.
-# v_voi: Used to construct the ap mask:
-# if v_voi[n] > 0, frame is voiced. If v_voi[n] == 0, frame is unvoiced. 
-# If v_voy=='estim', the mask is estimated from phase data.
-# hf_slope_coeff: 1=no slope, 2=finishing with twice the energy at highest frequency.
-#def synthesis_with_del_comp_and_ph_encoding5(m_mag_mel_log, m_real_mel, m_imag_mel, v_f0, nfft, fs, mvf, f0_type='lf0', hf_slope_coeff=1.0, b_use_ap_voi=True, b_voi_ap_win=True):
-def synthesis_from_compressed_type1(m_mag_mel_log, m_real_mel, m_imag_mel, v_lf0, fs, fft_len=None, hf_slope_coeff=1.0, b_voi_ap_win=True):
+def synthesis_from_compressed_type1(m_mag_mel_log, m_real_mel, m_imag_mel, v_lf0, fs, fft_len=None, hf_slope_coeff=1.0, b_voi_ap_win=True, b_fbank_mel=False):
+
+    '''
+    b_fbank_mel: If True, Mel compression done by the filter bank approach. Otherwise, it uses sptk mcep related funcs.
+    '''
     
     # Constants for spectral crossfade (in Hz):
     crsf_cf, crsf_bw = define_crossfade_params(fs)
@@ -639,7 +630,11 @@ def synthesis_from_compressed_type1(m_mag_mel_log, m_real_mel, m_imag_mel, v_lf0
     ncoeffs_comp = m_real_mel.shape[1] 
 
     # Magnitude mel-unwarp:----------------------------------------------------
-    m_mag = np.exp(la.sp_mel_unwarp(m_mag_mel_log, fft_len_half, alpha=alpha, in_type='log'))
+    if b_fbank_mel:
+        m_mag = np.exp(la.sp_mel_unwarp_fbank(m_mag_mel_log, fft_len_half, alpha=alpha))
+    else:
+        m_mag = np.exp(la.sp_mel_unwarp(m_mag_mel_log, fft_len_half, alpha=alpha, in_type='log'))
+
 
     # Complex mel-unwarp:------------------------------------------------------
     f_intrp_real = interpolate.interp1d(np.arange(ncoeffs_comp), m_real_mel, kind='nearest', fill_value='extrapolate')
@@ -1791,7 +1786,11 @@ def post_filter(m_mag_mel_log, fs, av_len_at_zero=None, av_len_at_nyq=None, boos
     return m_mag_mel_log_enh
 
 
-def format_for_modelling(m_mag, m_real, m_imag, v_f0, fs, nbins_mel=60, nbins_phase=45):
+
+def format_for_modelling(m_mag, m_real, m_imag, v_f0, fs, nbins_mel=60, nbins_phase=45, b_fbank_mel=True):
+    '''
+    b_fbank_mel: If True, Mel compression done by the filter bank approach. Otherwise, it uses sptk mcep related funcs.
+    '''
 
     # alpha:
     alpha = define_alpha(fs)
@@ -1802,9 +1801,38 @@ def format_for_modelling(m_mag, m_real, m_imag, v_f0, fs, nbins_mel=60, nbins_ph
     v_lf0_smth = la.f0_to_lf0(v_f0_smth)
 
     # Mag to Log-Mag-Mel (compression):
-    m_mag_mel = la.sp_mel_warp(m_mag, nbins_mel, alpha=alpha, in_type=3)
+    if b_fbank_mel:
+        m_mag_mel = la.sp_mel_warp_fbank(m_mag, nbins_mel, alpha=alpha)
+    else:
+        m_mag_mel = la.sp_mel_warp(m_mag, nbins_mel, alpha=alpha, in_type=3)
+
     m_mag_mel_log =  la.log(m_mag_mel)
 
+    # Debug:-----------------
+    #'''
+    if False: # Debug
+        m_mag_mel_debug, v_cntrs = sp_mel_warp(m_mag, nbins_mel, alpha=alpha)
+        m_mag_mel_log_debug = np.log(m_mag_mel_debug)
+        m_mag_log_rec_debug = sp_mel_unwarp(m_mag_mel_log_debug, v_cntrs, m_mag.shape[1])
+        m_mag_log_rec = la.sp_mel_unwarp(m_mag_mel_log, m_mag.shape[1])
+
+        err_norm = np.sqrt(np.sum((np.log(m_mag[:,:200]) - m_mag_log_rec[:,:200])**2))
+        err_debug = np.sqrt(np.sum((np.log(m_mag[:,:200]) - m_mag_log_rec_debug[:,:200])**2))
+    #'''
+
+    if False:
+        from libplot import lp
+        plm(m_mag_log_rec)
+        plm(m_mag_log_rec_debug)
+        nx=171; lp.figure(); lp.plot(np.log(m_mag[nx,:])); lp.plot(m_mag_log_rec[nx,:]); lp.plot(m_mag_log_rec_debug[nx,:]); lp.grid()
+        nx=20; lp.figure(); lp.plot(np.log(m_mag[nx,:])); lp.plot(m_mag_log_rec[nx,:]); lp.plot(m_mag_log_rec_debug[nx,:]); lp.grid()
+
+    if False:
+        from libplot import lp
+        lp.plotm(m_mag_mel_log)
+        lp.plotm(m_mag_mel_log_debug)
+        lp.plotm(m_mag_mel_log - m_mag_mel_log_debug)
+        nx=171; lp.figure(); lp.plot(m_mag[nx,:]); lp.plot(m_mag_mel_log[nx,:]); lp.plot(m_mag_mel_log_debug[nx,:]); lp.grid()
     # Phase feats to Mel-phase (compression):
     m_imag_mel = la.sp_mel_warp(m_imag, nbins_mel, alpha=alpha, in_type=2)
     m_real_mel = la.sp_mel_warp(m_real, nbins_mel, alpha=alpha, in_type=2)
@@ -1945,6 +1973,7 @@ def analysis_compressed_type1(wav_file, fft_len=None, out_dir=None, nbins_mel=60
 
     # Analysis:
     m_mag, m_real, m_imag, v_f0, fs, v_shift = analysis_lossless(wav_file, fft_len=fft_len)
+
 
     # Formatting for Acoustic Modelling:
     m_mag_mel_log, m_real_mel, m_imag_mel, v_lf0_smth = format_for_modelling(m_mag, m_real, m_imag, v_f0, fs, nbins_mel=nbins_mel, nbins_phase=nbins_phase)

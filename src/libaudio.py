@@ -22,7 +22,69 @@ from ConfigParser import SafeConfigParser
 
 MAGIC = -1.0E+10 # logarithm floor (the same as SPTK)
 
+#-----------------------------------------------------------------------------------
+class MelFBank: # NOT WORKING YET!
+
+    def __init__(self, n_in, n_out, alpha=0.77):
+
+        # For now, hardcoded:
+        eval_func=self.eval_hanning
+
+        # Bins warping:
+        v_bins_in  = np.linspace(0, np.pi, num=n_in)
+        v_bins_warp = np.arctan(  (1-alpha**2) * np.sin(v_bins_in) / ((1+alpha**2)*np.cos(v_bins_in) - 2*alpha) )
+        v_bins_warp[v_bins_warp < 0] += np.pi
+
+        # Bands gen:
+        maxval = v_bins_warp[-1]
+        tr_width_half = maxval / (n_out - 1)
+        v_crit_points = np.linspace(-tr_width_half, maxval+tr_width_half, num=(n_out+2))
+
+        # Eval triangles:
+        m_trans = np.zeros((n_in, n_out))
+        for nxout in xrange(n_out):
+            for nxin in xrange(n_in):
+                m_trans[nxin, nxout] = eval_func(v_bins_warp[nxin], v_crit_points[nxout], v_crit_points[nxout+2])
+
+
+        # Ener normalisation:
+        v_ener_warp   = np.sum(m_trans, axis=0)
+        v_ener_unwarp = np.sum(m_trans, axis=1)
+
+        self.m_warp   = m_trans / v_ener_warp
+        self.m_unwarp = (m_trans / v_ener_unwarp[:,None]).T
+        return
+
+
+    def eval_triang(self, x, l, r):
+        mp = (l + r) / 2 # mid point
+
+        if (l <= x) and ( x < mp):
+            cb = l
+
+        elif (mp <= x) and ( x <= r):
+            cb = r
+
+        else:
+            return 0
+
+        a = 1 / (mp - cb)
+        b = -cb * a
+        return a * x  + b
+
+
+    def eval_hanning(self, x, l, r):
+
+        if (x < l) or (r < x):
+            return 0
+
+        a  = 2 * np.pi / (r - l)
+        b  = np.pi - a * r
+        x2 = a * x + b
+        return 0.5 * (1 + np.cos(x2))
 #-------------------------------------------------------------------------------
+
+
 def parse_config():
     global _reaper_bin, _sptk_mcep_bin
     _curr_dir = os.path.dirname(os.path.realpath(__file__))
@@ -822,3 +884,66 @@ def convert_label_state_align_to_var_frame_rate(in_lab_st_file, v_dur_state, out
     return
 
 
+def sp_mel_warp_fbank(m_mag, n_melbands, alpha=0.77):
+
+    nfrms, nbins = m_mag.shape
+
+    # Bins warping:
+    v_bins  = np.linspace(0, np.pi, num=nbins)
+    v_bins_warp = np.arctan(  (1-alpha**2) * np.sin(v_bins) / ((1+alpha**2)*np.cos(v_bins) - 2*alpha) )
+    v_bins_warp[v_bins_warp < 0] += np.pi
+
+    # Bands gen:
+    maxval = v_bins_warp[-1]
+    v_cntrs_mel   = np.linspace(0, maxval, n_melbands)
+    v_middles_mel = v_cntrs_mel + 0.5*(v_cntrs_mel[1] - v_cntrs_mel[0])
+    v_middles_mel = v_middles_mel[:-1]
+
+    # To linear frequency:
+    f_interp  = interpolate.interp1d(v_bins_warp, np.arange(nbins), kind='quadratic')
+    v_cntrs   = lu.round_to_int(f_interp(v_cntrs_mel))
+    v_middles = lu.round_to_int(f_interp(v_middles_mel))
+
+    # Compress:
+    m_mag_mel_log = np.zeros((nfrms, n_melbands))
+    v_middles_ext = np.r_[0, v_middles, v_cntrs[-1]]
+
+    m_mag_log = log(m_mag)
+    for nxf in xrange(nfrms):
+        #print(nxf)
+        v_curr_mag_log = m_mag_log[nxf,:]
+        for nxb in xrange(n_melbands):
+            #print(nxb)
+            m_mag_mel_log[nxf,nxb] = np.mean(v_curr_mag_log[v_middles_ext[nxb]:v_middles_ext[nxb+1]])
+
+    m_mag_mel = np.exp(m_mag_mel_log)
+
+    return m_mag_mel
+
+def sp_mel_unwarp_fbank(m_mag_mel, nbins, alpha=0.77):
+
+    nfrms, n_melbands = m_mag_mel.shape
+
+    # All of this to compute v_cntrs. It could be coded much more efficiently.----------------------
+    # Bins warping:
+    v_bins  = np.linspace(0, np.pi, num=nbins)
+    v_bins_warp = np.arctan(  (1-alpha**2) * np.sin(v_bins) / ((1+alpha**2)*np.cos(v_bins) - 2*alpha) )
+    v_bins_warp[v_bins_warp < 0] += np.pi
+
+    # Bands gen:
+    maxval = v_bins_warp[-1]
+    v_cntrs_mel   = np.linspace(0, maxval, n_melbands)
+
+    # To linear frequency:
+    f_interp  = interpolate.interp1d(v_bins_warp, np.arange(nbins), kind='quadratic')
+    v_cntrs   = lu.round_to_int(f_interp(v_cntrs_mel))
+    #--------------------------------------------------------------------------------------------------
+
+    v_bins = np.arange(nbins)
+    m_mag = np.zeros((nfrms, nbins))
+    for nxf in xrange(nfrms):
+        f_interp = interpolate.interp1d(v_cntrs, m_mag_mel[nxf,:], kind='quadratic')
+        #f_interp = interpolate.interp1d(v_cntrs, m_mag_mel[nxf,:], kind='linear')
+        m_mag[nxf,:] = f_interp(v_bins)
+
+    return m_mag
