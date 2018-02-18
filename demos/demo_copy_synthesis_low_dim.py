@@ -59,28 +59,30 @@ if __name__ == '__main__':
     out_dir       = 'data_48k/wavs_syn' # Where the synthesised waveform will be stored.
     b_plots       = True # True if you want to plot the extracted parameters.
 
+    const_rate_ms = 5#-1.0 # 5 #-1.0
+
     # PROCESS:============================================================================
     lu.mkdir(out_dir)
 
     # ANALYSIS:
     print("Analysing.....................................................")
-    m_mag_mel_log, m_real_mel, m_imag_mel, v_lf0, v_shift, fs, fft_len = mp.analysis_compressed_type1(wav_file_orig)
+    m_mag_mel_log, m_real_mel, m_imag_mel, v_lf0, v_shift, fs, fft_len = mp.analysis_compressed_type1(wav_file_orig, const_rate_ms=const_rate_ms)
 
     #m_mag_mel_log, m_real_mel, m_imag_mel, v_lf0, v_shift, fs, fft_len, v_lgain = mp.analysis_compressed_type2(wav_file_orig)
 
     # MODIFICATIONS:
     # You can modify the parameters here if wanted.
-    lu.write_binfile(m_mag_mel_log, out_dir + '/' + lu.get_filename(wav_file_orig) + '_copy_syn_low_dim.mag')
+    #lu.write_binfile(m_mag_mel_log, out_dir + '/' + lu.get_filename(wav_file_orig) + '_copy_syn_low_dim.mag')
 
     # SYNTHESIS:
     print("Synthesising.................................................")
-    v_syn_sig = mp.synthesis_from_compressed_type1(m_mag_mel_log, m_real_mel, m_imag_mel, v_lf0, fs, fft_len)
+    v_syn_sig = mp.synthesis_from_compressed_type1(m_mag_mel_log, m_real_mel, m_imag_mel, v_lf0, fs, fft_len, const_rate_ms=const_rate_ms)
 
     #v_syn_sig = mp.synthesis_from_compressed_type2(m_mag_mel_log, m_real_mel, m_imag_mel, v_lf0, fs, fft_len)
 
     # SAVE WAV FILE:
     print("Saving wav file..............................................")
-    wav_file_syn = out_dir + '/' + lu.get_filename(wav_file_orig) + '_copy_syn_low_dim.wav'
+    wav_file_syn = out_dir + '/' + lu.get_filename(wav_file_orig) + '_copy_syn_low_dim_type1_const_rate_cubic.wav'
     la.write_audio_file(wav_file_syn, v_syn_sig, fs)
 
     # PLOTS:===============================================================================

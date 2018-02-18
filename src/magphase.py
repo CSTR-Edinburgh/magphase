@@ -612,7 +612,7 @@ def synthesis_with_del_comp__ph_enc__from_f0(m_spmgc, m_phs, m_phc, v_f0, nFFT, 
     return v_syn_sig
     
 #==============================================================================
-def synthesis_from_compressed_type1(m_mag_mel_log, m_real_mel, m_imag_mel, v_lf0, fs, fft_len=None, hf_slope_coeff=1.0, b_voi_ap_win=True, b_fbank_mel=False):
+def synthesis_from_compressed_type1(m_mag_mel_log, m_real_mel, m_imag_mel, v_lf0, fs, fft_len=None, hf_slope_coeff=1.0, b_voi_ap_win=True, b_fbank_mel=False, const_rate_ms=-1.0):
 
     '''
     b_fbank_mel: If True, Mel compression done by the filter bank approach. Otherwise, it uses sptk mcep related funcs.
@@ -645,9 +645,22 @@ def synthesis_from_compressed_type1(m_mag_mel_log, m_real_mel, m_imag_mel, v_lf0
     
     m_real = la.sp_mel_unwarp(m_real_mel, fft_len_half, alpha=alpha, in_type='log')
     m_imag = la.sp_mel_unwarp(m_imag_mel, fft_len_half, alpha=alpha, in_type='log')
+
+
+    # Constant to variable frame rate:-----------------------------------------
+    v_shift = f0_to_shift(v_f0, fs)
+    if const_rate_ms>0.0:
+        interp_type = 'cubic' #'quadratic'
+        v_shift, v_frm_locs_smpls = get_shifts_and_frm_locs_from_const_shifts(v_shift, const_rate_ms, fs, interp_type=interp_type)
+        m_mag  = interp_from_const_to_variable_rate(m_mag,    v_frm_locs_smpls, const_rate_ms, fs, interp_type=interp_type)
+        m_real = interp_from_const_to_variable_rate(m_real,   v_frm_locs_smpls, const_rate_ms, fs, interp_type=interp_type)
+        m_imag = interp_from_const_to_variable_rate(m_imag,   v_frm_locs_smpls, const_rate_ms, fs, interp_type=interp_type)
+        v_voi  = interp_from_const_to_variable_rate(v_f0>0.0, v_frm_locs_smpls, const_rate_ms, fs, interp_type=interp_type) > 0.5
+        v_f0   = shift_to_f0(v_shift, v_voi, fs, out='f0', b_smooth=False)
+        nfrms  = v_shift.size
     
     # Noise Gen:---------------------------------------------------------------
-    v_shift = f0_to_shift(v_f0, fs, unv_frm_rate_ms=5).astype(int)
+    v_shift = v_shift.astype(int)
     v_pm    = la.shift_to_pm(v_shift)
     
     ns_len = v_pm[-1] + (v_pm[-1] - v_pm[-2]) 
@@ -1637,8 +1650,20 @@ def interp_from_variable_to_const_frm_rate(m_data, v_pm_smpls, const_rate_ms, fs
     #cons_frm_rate_frm_len = 2 * frm_rate_smpls # This assummed according to the Merlin code. E.g., frame_number = int((end_time - start_time)/50000)
     v_c_rate_centrs_smpls = np.arange(const_rate_smpls, dur_total_smpls, const_rate_smpls)
 
-    # Interpolation m_spmgc:         
-    f_interp = interpolate.interp1d(np.r_[0, v_pm_smpls], np.vstack((m_data[0,:], m_data)), axis=0, kind=interp_type)
+    # Interpolation:
+
+    #interpolate.UnivariateSpline(np.r_[0, v_pm_smpls], np.r_[m_data[0], m_data], k=2)
+    '''
+    if m_data.ndim==1:
+        f_interp = interpolate.interp1d(np.r_[0, v_pm_smpls], np.r_[m_data[0], m_data], kind=interp_type, assume_sorted=False)
+    else:
+        f_interp = interpolate.interp1d(np.r_[0, v_pm_smpls], np.vstack((m_data[0,:], m_data)), axis=0, kind=interp_type, assume_sorted=False)
+    '''
+    if v_pm_smpls[0]>0: # Protection
+        f_interp = interpolate.interp1d(np.r_[0, v_pm_smpls], np.vstack((m_data[0,:], m_data)), axis=0, kind=interp_type)
+    else:
+        f_interp = interpolate.interp1d(v_pm_smpls, m_data, axis=0, kind=interp_type)
+
     m_data_const_rate = f_interp(v_c_rate_centrs_smpls) 
 
     dp.end(m_data_const_rate)
@@ -1787,7 +1812,7 @@ def post_filter(m_mag_mel_log, fs, av_len_at_zero=None, av_len_at_nyq=None, boos
 
 
 
-def format_for_modelling(m_mag, m_real, m_imag, v_f0, fs, nbins_mel=60, nbins_phase=45, b_fbank_mel=True):
+def format_for_modelling(m_mag, m_real, m_imag, v_f0, fs, nbins_mel=60, nbins_phase=45, b_fbank_mel=False):
     '''
     b_fbank_mel: If True, Mel compression done by the filter bank approach. Otherwise, it uses sptk mcep related funcs.
     '''
@@ -1969,11 +1994,28 @@ def analysis_lossless(wav_file, fft_len=None, out_dir=None):
 
     return m_mag, m_real, m_imag, v_f0, fs, v_shift
 
-def analysis_compressed_type1(wav_file, fft_len=None, out_dir=None, nbins_mel=60, nbins_phase=45):
+def analysis_compressed_type1(wav_file, fft_len=None, out_dir=None, nbins_mel=60, nbins_phase=45, const_rate_ms=-1.0):
 
     # Analysis:
     m_mag, m_real, m_imag, v_f0, fs, v_shift = analysis_lossless(wav_file, fft_len=fft_len)
 
+    # Debug: smoothing. interesante resultado. NO BORRAR!!
+    #m_mag = la.smooth_by_conv(m_mag, v_win=np.r_[0.3, 0.4, 0.3])
+    #m_mag = np.exp(la.smooth_by_conv(la.log(m_mag), v_win=np.ones(3)))
+
+    # To constant rate:
+    if const_rate_ms>0.0:
+        interp_type = 'cubic' #  'quadratic' # 'linear'
+        v_pm_smpls = la.shift_to_pm(v_shift)
+        m_mag  = interp_from_variable_to_const_frm_rate(m_mag,  v_pm_smpls, const_rate_ms, fs, interp_type=interp_type)
+        m_real = interp_from_variable_to_const_frm_rate(m_real, v_pm_smpls, const_rate_ms, fs, interp_type=interp_type)
+        m_imag = interp_from_variable_to_const_frm_rate(m_imag, v_pm_smpls, const_rate_ms, fs, interp_type=interp_type)
+
+        # f0:
+        v_voi = v_f0>1.0
+        v_f0  = interp_from_variable_to_const_frm_rate(np.r_[ v_f0[v_voi][0],v_f0[v_voi], v_f0[v_voi][-1] ], np.r_[ 0, v_pm_smpls[v_voi], v_pm_smpls[-1] ], const_rate_ms, fs, interp_type=interp_type).squeeze()
+        v_voi = interp_from_variable_to_const_frm_rate(v_voi, v_pm_smpls, const_rate_ms, fs, interp_type=interp_type)>0.5
+        v_f0  *= v_voi # Double check this. At the beginning of voiced segments.
 
     # Formatting for Acoustic Modelling:
     m_mag_mel_log, m_real_mel, m_imag_mel, v_lf0_smth = format_for_modelling(m_mag, m_real, m_imag, v_f0, fs, nbins_mel=nbins_mel, nbins_phase=nbins_phase)
@@ -1986,7 +2028,8 @@ def analysis_compressed_type1(wav_file, fft_len=None, out_dir=None, nbins_mel=60
         write_featfile(m_real_mel   , out_dir, file_id + '.real')
         write_featfile(m_imag_mel   , out_dir, file_id + '.imag')
         write_featfile(v_lf0_smth   , out_dir, file_id + '.lf0')
-        write_featfile(v_shift      , out_dir, file_id + '.shift')
+        if const_rate_ms<=0.0: # If variable rate, save shift files.
+            write_featfile(v_shift      , out_dir, file_id + '.shift')
         return
 
     return m_mag_mel_log, m_real_mel, m_imag_mel, v_lf0_smth, v_shift, fs, fft_len

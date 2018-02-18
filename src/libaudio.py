@@ -22,66 +22,6 @@ from ConfigParser import SafeConfigParser
 
 MAGIC = -1.0E+10 # logarithm floor (the same as SPTK)
 
-#-----------------------------------------------------------------------------------
-class MelFBank: # NOT WORKING YET!
-
-    def __init__(self, n_in, n_out, alpha=0.77):
-
-        # For now, hardcoded:
-        eval_func=self.eval_hanning
-
-        # Bins warping:
-        v_bins_in  = np.linspace(0, np.pi, num=n_in)
-        v_bins_warp = np.arctan(  (1-alpha**2) * np.sin(v_bins_in) / ((1+alpha**2)*np.cos(v_bins_in) - 2*alpha) )
-        v_bins_warp[v_bins_warp < 0] += np.pi
-
-        # Bands gen:
-        maxval = v_bins_warp[-1]
-        tr_width_half = maxval / (n_out - 1)
-        v_crit_points = np.linspace(-tr_width_half, maxval+tr_width_half, num=(n_out+2))
-
-        # Eval triangles:
-        m_trans = np.zeros((n_in, n_out))
-        for nxout in xrange(n_out):
-            for nxin in xrange(n_in):
-                m_trans[nxin, nxout] = eval_func(v_bins_warp[nxin], v_crit_points[nxout], v_crit_points[nxout+2])
-
-
-        # Ener normalisation:
-        v_ener_warp   = np.sum(m_trans, axis=0)
-        v_ener_unwarp = np.sum(m_trans, axis=1)
-
-        self.m_warp   = m_trans / v_ener_warp
-        self.m_unwarp = (m_trans / v_ener_unwarp[:,None]).T
-        return
-
-
-    def eval_triang(self, x, l, r):
-        mp = (l + r) / 2 # mid point
-
-        if (l <= x) and ( x < mp):
-            cb = l
-
-        elif (mp <= x) and ( x <= r):
-            cb = r
-
-        else:
-            return 0
-
-        a = 1 / (mp - cb)
-        b = -cb * a
-        return a * x  + b
-
-
-    def eval_hanning(self, x, l, r):
-
-        if (x < l) or (r < x):
-            return 0
-
-        a  = 2 * np.pi / (r - l)
-        b  = np.pi - a * r
-        x2 = a * x + b
-        return 0.5 * (1 + np.cos(x2))
 #-------------------------------------------------------------------------------
 
 
@@ -947,3 +887,49 @@ def sp_mel_unwarp_fbank(m_mag_mel, nbins, alpha=0.77):
         m_mag[nxf,:] = f_interp(v_bins)
 
     return m_mag
+
+
+
+#-------------------------------------------------------------------------------------------------------
+# 1-D Smoothing by convolution: (from ScyPy Cookbook - not checked yet!)-----------------------------
+def smooth_by_conv(m_data, v_win=np.hanning(11)):
+    '''
+    Smooths along m_data columns. If m_data is 1d, it smooths along the other dimension.
+    Length of v_win should be odd.
+    '''
+
+    def smooth_by_conv_1d(v_data, v_win=np.hanning(11)):
+        """smooth the data using a window with requested size.
+
+        TODO: the window parameter could be the window itself if an array instead of a string
+        NOTE: length(output) != length(input), to correct this: return y[(win_len/2-1):-(win_len/2)] instead of just y.
+        """
+        win_len = v_win.size
+        if v_data.ndim != 1:
+            raise ValueError, "smooth only accepts 1 dimension arrays."
+        if v_data.size < win_len:
+            raise ValueError, "Input vector needs to be bigger than window size."
+
+        if win_len<3:
+            return v_data
+
+        half_win_len = (win_len-1)/2
+        v_data_ext   = np.r_[ v_data[0]+np.zeros(half_win_len), v_data, v_data[-1]+np.zeros(half_win_len)]
+
+        v_data_smth = np.convolve(v_win/v_win.sum(), v_data_ext, mode='valid')
+
+        #v_data_smth2 = v_data_smth[half_win_len:-half_win_len]
+        #s=np.r_[v_data[win_len-1:0:-1],v_data,v_data[-1:-win_len:-1]]
+
+        #y=np.convolve(v_win/v_win.sum(),s,mode='valid')
+        return v_data_smth
+
+    if m_data.ndim==1:
+        return smooth_by_conv_1d(m_data, v_win=v_win)
+
+    m_data_smth = np.zeros((m_data.shape))
+    ncols = m_data.shape[1]
+    for nxc in xrange(ncols):
+        m_data_smth[:,nxc] = smooth_by_conv_1d(m_data[:,nxc], v_win=v_win)
+
+    return m_data_smth
