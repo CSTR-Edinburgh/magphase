@@ -650,7 +650,7 @@ def synthesis_from_compressed_type1(m_mag_mel_log, m_real_mel, m_imag_mel, v_lf0
     # Constant to variable frame rate:-----------------------------------------
     v_shift = f0_to_shift(v_f0, fs)
     if const_rate_ms>0.0:
-        interp_type = 'cubic' #'quadratic'
+        interp_type = 'linear' #'quadratic' , 'cubic'
         v_shift, v_frm_locs_smpls = get_shifts_and_frm_locs_from_const_shifts(v_shift, const_rate_ms, fs, interp_type=interp_type)
         m_mag  = interp_from_const_to_variable_rate(m_mag,    v_frm_locs_smpls, const_rate_ms, fs, interp_type=interp_type)
         m_real = interp_from_const_to_variable_rate(m_real,   v_frm_locs_smpls, const_rate_ms, fs, interp_type=interp_type)
@@ -2005,7 +2005,7 @@ def analysis_compressed_type1(wav_file, fft_len=None, out_dir=None, nbins_mel=60
 
     # To constant rate:
     if const_rate_ms>0.0:
-        interp_type = 'cubic' #  'quadratic' # 'linear'
+        interp_type = 'linear' #  'quadratic' # 'linear'
         v_pm_smpls = la.shift_to_pm(v_shift)
         m_mag  = interp_from_variable_to_const_frm_rate(m_mag,  v_pm_smpls, const_rate_ms, fs, interp_type=interp_type)
         m_real = interp_from_variable_to_const_frm_rate(m_real, v_pm_smpls, const_rate_ms, fs, interp_type=interp_type)

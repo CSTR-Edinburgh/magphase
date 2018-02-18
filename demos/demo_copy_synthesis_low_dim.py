@@ -55,7 +55,8 @@ def plots(m_mag_mel_log, m_real_mel, m_imag_mel, v_lf0):
 if __name__ == '__main__':  
 
     # INPUT:==============================================================================
-    wav_file_orig = 'data_48k/wavs_nat/hvd_593.wav' # Original natural wave file. You can choose anyone provided in the /wavs_nat directory.
+    #wav_file_orig = 'data_48k/wavs_nat/hvd_593.wav' # Original natural wave file. You can choose anyone provided in the /wavs_nat directory.
+    wav_file_orig = '/home/felipe/Felipe_Espic/Databases/Nick-Zhizheng_dnn_baseline_practice/data/wav/herald_1850.wav'
     out_dir       = 'data_48k/wavs_syn' # Where the synthesised waveform will be stored.
     b_plots       = True # True if you want to plot the extracted parameters.
 
