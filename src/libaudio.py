@@ -933,3 +933,19 @@ def smooth_by_conv(m_data, v_win=np.hanning(11)):
         m_data_smth[:,nxc] = smooth_by_conv_1d(m_data[:,nxc], v_win=v_win)
 
     return m_data_smth
+
+def build_min_phase_from_mag_spec(m_mag):
+
+    fft_len_half = m_mag.shape[1]
+    m_mag_log = log(m_mag)
+    m_mag_log = add_hermitian_half(m_mag_log)
+    m_ceps    = np.fft.ifft(m_mag_log).real
+
+    m_ceps_min_ph = m_ceps
+    m_ceps_min_ph[:,fft_len_half:] = 0.0
+    m_ceps_min_ph[:,1:(fft_len_half-1)] *= 2.0
+    m_mag_cmplx_min_ph = np.fft.fft(m_ceps_min_ph)
+    m_mag_cmplx_min_ph = remove_hermitian_half(m_mag_cmplx_min_ph)
+    m_mag_cmplx_min_ph = np.exp(m_mag_cmplx_min_ph)
+
+    return m_mag_cmplx_min_ph

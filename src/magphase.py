@@ -612,10 +612,13 @@ def synthesis_with_del_comp__ph_enc__from_f0(m_spmgc, m_phs, m_phc, v_f0, nFFT, 
     return v_syn_sig
     
 #==============================================================================
-def synthesis_from_compressed_type1(m_mag_mel_log, m_real_mel, m_imag_mel, v_lf0, fs, fft_len=None, hf_slope_coeff=1.0, b_voi_ap_win=True, b_fbank_mel=False, const_rate_ms=-1.0):
+def synthesis_from_compressed_type1(m_mag_mel_log, m_real_mel, m_imag_mel, v_lf0, fs,
+                                    fft_len=None, hf_slope_coeff=1.0, b_voi_ap_win=True,
+                                    b_fbank_mel=False, const_rate_ms=-1.0, phase_type='magphase'):
 
     '''
     b_fbank_mel: If True, Mel compression done by the filter bank approach. Otherwise, it uses sptk mcep related funcs.
+    phase_type: 'magphase', 'min_phase', or 'linear'
     '''
     
     # Constants for spectral crossfade (in Hz):
@@ -627,7 +630,7 @@ def synthesis_from_compressed_type1(m_mag_mel_log, m_real_mel, m_imag_mel, v_lf0
     fft_len_half = fft_len / 2 + 1
     v_f0 = np.exp(v_lf0)
     nfrms, ncoeffs_mag = m_mag_mel_log.shape
-    ncoeffs_comp = m_real_mel.shape[1] 
+
 
     # Magnitude mel-unwarp:----------------------------------------------------
     if b_fbank_mel:
@@ -635,8 +638,8 @@ def synthesis_from_compressed_type1(m_mag_mel_log, m_real_mel, m_imag_mel, v_lf0
     else:
         m_mag = np.exp(la.sp_mel_unwarp(m_mag_mel_log, fft_len_half, alpha=alpha, in_type='log'))
 
-
     # Complex mel-unwarp:------------------------------------------------------
+    ncoeffs_comp = m_real_mel.shape[1]
     f_intrp_real = interpolate.interp1d(np.arange(ncoeffs_comp), m_real_mel, kind='nearest', fill_value='extrapolate')
     f_intrp_imag = interpolate.interp1d(np.arange(ncoeffs_comp), m_imag_mel, kind='nearest', fill_value='extrapolate')
     
@@ -694,28 +697,53 @@ def synthesis_from_compressed_type1(m_mag_mel_log, m_real_mel, m_imag_mel, v_lf0
     v_slope  = np.linspace(1, hf_slope_coeff, num=fft_len_half)
     m_ap_mask[~vb_voi,:] = m_ap_mask[~vb_voi,:] * v_slope 
     
-    # Det-Mask:----------------------------------------------------------------    
-    m_det_mask = m_mag
+    # Det-Mask:----------------------------------------------------------------
+    m_det_mask = m_mag.copy()
     m_det_mask[~vb_voi,:] = 0
     m_det_mask[vb_voi,:]  = la.spectral_crossfade(m_det_mask[vb_voi,:], m_zeros[vb_voi,:], crsf_cf, crsf_bw, fs, freq_scale='hz')
     
-    # Applying masks:----------------------------------------------------------
-    m_ap_cmplx  = m_ap_mask  * m_ns_cmplx
-    m_det_cmplx = m_real + m_imag * 1j
+    # Deterministic Part:----------------------------------------------------------
+    if phase_type=='magphase':
+        m_det_cmplx_ph  = m_real + m_imag * 1j
+
+        # Protection:
+        m_det_cmplx_ph_mag = np.absolute(m_det_cmplx_ph)
+        m_det_cmplx_ph_mag[m_det_cmplx_ph_mag==0.0] = 1.0
+        m_det_cmplx_ph = m_det_cmplx_ph / m_det_cmplx_ph_mag
+
+        m_det_cmplx_spec = m_det_mask * m_det_cmplx_ph
+
+    if phase_type=='linear':
+        m_det_cmplx_spec = m_det_mask
+
+    elif phase_type=='min_phase':
+        m_det_cmplx_spec  = la.build_min_phase_from_mag_spec(m_mag)
 
     # Protection:
-    m_det_cmplx_abs = np.absolute(m_det_cmplx)
-    m_det_cmplx_abs[m_det_cmplx_abs==0.0] = 1.0
+    m_det_cmplx_spec[m_det_mask==0.0] = 0 + 0j
 
-    m_det_cmplx = m_det_mask * m_det_cmplx / m_det_cmplx_abs
+    # Stochastic Part:----------------------------------------------------------
+    m_ap_cmplx_spec = m_ap_mask  * m_ns_cmplx
+
+    # Protection:
+    m_ap_cmplx_spec[m_ap_mask==0.0]   = 0 + 0j
+
+    if False:
+        plm(m_det_mask)
+        plm(np.angle(m_det_cmplx_ph))
+        plm(np.angle(m_det_cmplx_spec))
+        plm(np.angle(m_ap_cmplx_spec))
+        nx=100; pl(np.angle(m_det_cmplx_spec[nx,:]))
+        plm(np.abs(np.absolute(m_det_cmplx_spec) - m_det_mask))
+        nx=95; figure(); plot(m_det_mask[nx,:], 'x-'); plot(np.absolute(m_det_cmplx_spec[nx,:])); grid()
 
     # bin width: bw=11.71875 Hz
     # Final synth:-------------------------------------------------------------
-    m_syn_cmplx = la.add_hermitian_half(m_ap_cmplx + m_det_cmplx, data_type='complex')    
+    m_syn_cmplx = la.add_hermitian_half(m_ap_cmplx_spec + m_det_cmplx_spec, data_type='complex')
     m_syn_td    = np.fft.ifft(m_syn_cmplx).real
     m_syn_td    = np.fft.fftshift(m_syn_td,  axes=1)
-    v_syn_sig   = ola(m_syn_td,  v_pm, win_func=None)
-       
+    v_syn_sig   = ola(m_syn_td, v_pm, win_func=None)
+
     # HPF:---------------------------------------------------------------------     
     fc    = 60
     order = 4
