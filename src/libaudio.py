@@ -15,6 +15,8 @@ import libutils as lu
 from scipy import interpolate
 from ConfigParser import SafeConfigParser
 
+
+
 # Configuration:
 #_curr_dir = os.path.dirname(os.path.realpath(__file__))
 #_reaper_bin    = os.path.realpath(_curr_dir + '/../tools/REAPER/build/reaper')
@@ -177,6 +179,10 @@ def frm_list_to_matrix(l_frames, v_shift, nFFT):
     nfrms    = len(v_shift)
     m_frm    = np.zeros((nfrms, nFFT))
     for i in xrange(nfrms):
+
+        # Debug:
+        #print(i)
+
         rel_shift  = nFFThalf - v_shift[i] - 1
         m_frm[i,:] = frame_shift(l_frames[i], rel_shift, nFFT)  
     
@@ -949,3 +955,63 @@ def build_min_phase_from_mag_spec(m_mag):
     m_mag_cmplx_min_ph = np.exp(m_mag_cmplx_min_ph)
 
     return m_mag_cmplx_min_ph
+
+
+
+'''
+# Ferom: https://github.com/librosa/librosa/issues/434 (Check license)
+def griffinlim(spectrogram, n_iter = 100, window = 'hann', n_fft = 2048, hop_length = -1, verbose = False):
+    if hop_length == -1:
+        hop_length = n_fft // 4
+
+    angles = np.exp(2j * np.pi * np.random.rand(*spectrogram.shape))
+
+    t = tqdm(range(n_iter), ncols=100, mininterval=2.0, disable=not verbose)
+    for i in t:
+        full = np.abs(spectrogram).astype(np.complex) * angles
+        inverse = librosa.istft(full, hop_length = hop_length, window = window)
+        rebuilt = librosa.stft(inverse, n_fft = n_fft, hop_length = hop_length, window = window)
+        angles = np.exp(1j * np.angle(rebuilt))
+
+        if verbose:
+            diff = np.abs(spectrogram) - np.abs(rebuilt)
+            t.set_postfix(loss=np.linalg.norm(diff, 'fro'))
+
+    full = np.abs(spectrogram).astype(np.complex) * angles
+    inverse = librosa.istft(full, hop_length = hop_length, window = window)
+
+    return inverse
+'''
+
+# From: https://github.com/candlewill/Griffin_lim/blob/master/utils/audio.py (Check license)
+'''
+import librosa
+def griffin_lim(S, fs, fft_len, niters=100):
+
+    frame_shift_ms  = 25
+    frame_length_ms = 50
+
+    def _stft(y):
+        #n_fft = (num_freq - 1) * 2
+        hop_length = int(frame_shift_ms / 1000 * fs)
+        win_length = int(frame_length_ms / 1000 * fs)
+        return librosa.stft(y=y, n_fft=fft_len, hop_length=hop_length, win_length=win_length)
+
+
+    def _istft(y):
+        hop_length = int(frame_shift_ms / 1000 * fs)
+        win_length = int(frame_length_ms / 1000 * fs)
+        return librosa.istft(y, hop_length=hop_length, win_length=win_length)
+
+    angles = np.exp(2j * np.pi * np.random.rand(*S.shape))
+    S_complex = np.abs(S).astype(np.complex)
+    for i in range(niters):
+        if i > 0:
+            angles = np.exp(1j * np.angle(_stft(y)))
+        y = _istft(S_complex * angles)
+    return y
+'''
+
+
+
+

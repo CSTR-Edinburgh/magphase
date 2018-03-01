@@ -58,12 +58,15 @@ if __name__ == '__main__':
     wav_file_orig = 'data_48k/wavs_nat/hvd_593.wav' # Original natural wave file. You can choose anyone provided in the /wavs_nat directory.
     #wav_file_orig = '/home/felipe/Felipe_Espic/Databases/Nick-Zhizheng_dnn_baseline_practice/data/wav/herald_1850.wav'
     out_dir       = 'data_48k/wavs_syn' # Where the synthesised waveform will be stored.
-    b_plots       = True # True if you want to plot the extracted parameters.
+    b_plots       = False # True if you want to plot the extracted parameters.
 
     const_rate_ms = -1.0 # 5#-1.0 # 5 #-1.0
 
-    phase_type = 'magphase'
-    #b_griffin_lim = True
+    det_phase_type = 'magphase'
+    griff_lim_type = None # None, 'det', 'whole'
+    griff_lim_init = 'magphase' # 'linear', 'magphase', 'min_phase' , 'random'
+
+    b_griffin_lim = True
 
     # PROCESS:============================================================================
     lu.mkdir(out_dir)
@@ -80,14 +83,17 @@ if __name__ == '__main__':
 
     # SYNTHESIS:
     print("Synthesising.................................................")
-    v_syn_sig = mp.synthesis_from_compressed_type1(m_mag_mel_log, m_real_mel, m_imag_mel, v_lf0, fs, fft_len, const_rate_ms=const_rate_ms, phase_type=phase_type)
-    #v_syn_sig = mp.synthesis_from_compressed_type1(m_mag_mel_log, m_real_mel, m_imag_mel, v_lf0, fs, fft_len, const_rate_ms=const_rate_ms, phase_type=phase_type, b_griffin_lim=b_griffin_lim)
+
+    v_syn_sig = mp.synthesis_from_compressed_type1(m_mag_mel_log, m_real_mel, m_imag_mel, v_lf0, fs, fft_len,
+                                                            const_rate_ms=const_rate_ms, det_phase_type=det_phase_type,
+                                                                griff_lim_type=griff_lim_type, griff_lim_init=griff_lim_init)
 
     #v_syn_sig = mp.synthesis_from_compressed_type2(m_mag_mel_log, m_real_mel, m_imag_mel, v_lf0, fs, fft_len)
 
     # SAVE WAV FILE:
     print("Saving wav file..............................................")
-    wav_file_syn = out_dir + '/' + lu.get_filename(wav_file_orig) + '_copy_syn_low_dim_min_normal2.wav'
+    #wav_file_syn = out_dir + '/' + lu.get_filename(wav_file_orig) + '_copy_syn_low_dim_griff_lim_det_magphase_i10.wav'
+    wav_file_syn = out_dir + '/' + lu.get_filename(wav_file_orig) + '_copy_syn_low_dim_normal.wav'
     la.write_audio_file(wav_file_syn, v_syn_sig, fs)
 
     # PLOTS:===============================================================================

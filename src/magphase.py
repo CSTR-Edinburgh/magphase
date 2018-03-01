@@ -54,8 +54,9 @@ def ola(m_frm, v_pm, win_func=None):
         v_sig[strt:(strt+frmlen)] += m_frm[i,:]
         strt += v_shift[i+1]
 
-    # Cut beginning:
+    # Cut ending and beginning:
     v_sig = v_sig[(frmlen/2 - v_pm[0]):]
+    v_sig = v_sig[:(v_pm[-1] + v_shift[-1] + 1)]
 
     return v_sig
 
@@ -612,15 +613,20 @@ def synthesis_with_del_comp__ph_enc__from_f0(m_spmgc, m_phs, m_phc, v_f0, nFFT, 
     return v_syn_sig
     
 #==============================================================================
-def synthesis_from_compressed_type1(m_mag_mel_log, m_real_mel, m_imag_mel, v_lf0, fs,
-                                    fft_len=None, hf_slope_coeff=1.0, b_voi_ap_win=True,
-                                    b_fbank_mel=False, const_rate_ms=-1.0, phase_type='magphase'):
+def synthesis_from_compressed_type1(m_mag_mel_log, m_real_mel, m_imag_mel, v_lf0, fs, fft_len=None,
+                                        hf_slope_coeff=1.0, b_voi_ap_win=True, b_fbank_mel=False, const_rate_ms=-1.0,
+                                                det_phase_type='magphase', griff_lim_type=None, griff_lim_init='magphase'):
 
     '''
     b_fbank_mel: If True, Mel compression done by the filter bank approach. Otherwise, it uses sptk mcep related funcs.
-    phase_type: 'magphase', 'min_phase', or 'linear'
+    det_phase_type: 'magphase', 'min_phase', or 'linear'
+    griff_lim_type: None, 'whole' , 'det', 'whole' (None=Griffin-Lim disabled)
+    griff_lim_init: 'magphase', 'linear', 'min_phase', 'random'
     '''
     
+
+
+
     # Constants for spectral crossfade (in Hz):
     crsf_cf, crsf_bw = define_crossfade_params(fs)
     alpha = define_alpha(fs)
@@ -668,7 +674,7 @@ def synthesis_from_compressed_type1(m_mag_mel_log, m_real_mel, m_imag_mel, v_lf0
     
     ns_len = v_pm[-1] + (v_pm[-1] - v_pm[-2]) 
     v_ns   = np.random.uniform(-1, 1, ns_len)     
-    
+
     # Noise Windowing:---------------------------------------------------------
     l_ns_win_funcs = [ np.hanning ] * nfrms
     vb_voi = v_f0 > 1 # case voiced  (1 is used for safety)  
@@ -696,14 +702,17 @@ def synthesis_from_compressed_type1(m_mag_mel_log, m_real_mel, m_imag_mel, v_lf0
     # HF - enhancement:          
     v_slope  = np.linspace(1, hf_slope_coeff, num=fft_len_half)
     m_ap_mask[~vb_voi,:] = m_ap_mask[~vb_voi,:] * v_slope 
-    
+
+    m_ap_cmplx_spec = m_ap_mask  * m_ns_cmplx
+    m_ap_cmplx_spec[m_ap_mask==0.0] = 0 + 0j # protection
+
     # Det-Mask:----------------------------------------------------------------
     m_det_mask = m_mag.copy()
     m_det_mask[~vb_voi,:] = 0
     m_det_mask[vb_voi,:]  = la.spectral_crossfade(m_det_mask[vb_voi,:], m_zeros[vb_voi,:], crsf_cf, crsf_bw, fs, freq_scale='hz')
     
     # Deterministic Part:----------------------------------------------------------
-    if phase_type=='magphase':
+    if det_phase_type=='magphase':
         m_det_cmplx_ph  = m_real + m_imag * 1j
 
         # Protection:
@@ -713,36 +722,66 @@ def synthesis_from_compressed_type1(m_mag_mel_log, m_real_mel, m_imag_mel, v_lf0
 
         m_det_cmplx_spec = m_det_mask * m_det_cmplx_ph
 
-    if phase_type=='linear':
+    if det_phase_type=='linear':
         m_det_cmplx_spec = m_det_mask
 
-    elif phase_type=='min_phase':
+    elif det_phase_type=='min_phase':
         m_det_cmplx_spec  = la.build_min_phase_from_mag_spec(m_mag)
 
     # Protection:
     m_det_cmplx_spec[m_det_mask==0.0] = 0 + 0j
 
-    # Stochastic Part:----------------------------------------------------------
-    m_ap_cmplx_spec = m_ap_mask  * m_ns_cmplx
+    # Griffin-Lim (only deterministic part):-----------------------------------
+    if griff_lim_type=='det':
 
-    # Protection:
-    m_ap_cmplx_spec[m_ap_mask==0.0]   = 0 + 0j
+        # Un-delay:
+        m_det_cmplx_spec = la.add_hermitian_half(m_det_cmplx_spec, data_type='complex')
+        m_frms_gl = np.fft.ifft(m_det_cmplx_spec).real
+        m_frms_gl = np.fft.fftshift(m_frms_gl, axes=1)
+        m_det_cmplx_spec = la.remove_hermitian_half(np.fft.fft(m_frms_gl))
+        m_det_cmplx_spec[m_det_mask==0.0] = 0 + 0j
 
-    if False:
-        plm(m_det_mask)
-        plm(np.angle(m_det_cmplx_ph))
-        plm(np.angle(m_det_cmplx_spec))
-        plm(np.angle(m_ap_cmplx_spec))
-        nx=100; pl(np.angle(m_det_cmplx_spec[nx,:]))
-        plm(np.abs(np.absolute(m_det_cmplx_spec) - m_det_mask))
-        nx=95; figure(); plot(m_det_mask[nx,:], 'x-'); plot(np.absolute(m_det_cmplx_spec[nx,:])); grid()
+        # GLA:
+        m_phase_gl_init = np.angle(m_det_cmplx_spec)
+        m_mag_gl        = np.absolute(m_det_cmplx_spec)
+        v_syn_sig, m_phase_gl = griffin_lim(m_mag_gl, v_shift, phase_init=m_phase_gl_init, niters=10)
+        m_det_cmplx_spec = m_mag_gl * np.exp(m_phase_gl * 1j)
 
+        # Re-delay:
+        m_det_cmplx_spec = la.add_hermitian_half(m_det_cmplx_spec, data_type='complex')
+        m_frms_gl = np.fft.ifft(m_det_cmplx_spec).real
+        m_frms_gl = np.fft.fftshift(m_frms_gl, axes=1)
+        m_det_cmplx_spec = la.remove_hermitian_half(np.fft.fft(m_frms_gl))
+        m_det_cmplx_spec[m_det_mask==0.0] = 0 + 0j
+
+    # Final synth:---------------------------------------------------------------
     # bin width: bw=11.71875 Hz
-    # Final synth:-------------------------------------------------------------
-    m_syn_cmplx = la.add_hermitian_half(m_ap_cmplx_spec + m_det_cmplx_spec, data_type='complex')
+    m_syn_cmplx = la.add_hermitian_half(m_det_cmplx_spec + m_ap_cmplx_spec, data_type='complex')
     m_syn_td    = np.fft.ifft(m_syn_cmplx).real
-    m_syn_td    = np.fft.fftshift(m_syn_td,  axes=1)
+    m_syn_td    = np.fft.fftshift(m_syn_td, axes=1)
     v_syn_sig   = ola(m_syn_td, v_pm, win_func=None)
+
+    # Griffin-Lim (whole):------------------------------------------------------------
+    #if griff_lim_type is not None:
+    if griff_lim_type=='whole':
+        m_fft_gl   = la.remove_hermitian_half(np.fft.fft(m_syn_td))
+        m_phase_gl_init = np.angle(m_fft_gl)
+        m_mag_gl   = np.absolute(m_fft_gl)
+        v_syn_sig, m_phase_gl = griffin_lim(m_mag_gl, v_shift, phase_init='min', niters=50)
+        #v_syn_sig_gl, m_phase_gl = griffin_lim(m_mag_gl, v_shift, phase_init='min', niters=50)
+        #v_syn_sig  = griffin_lim(m_mag_gl, v_shift, phase_init=m_phase_gl_init, niters=50)
+        '''
+        if griff_lim_type=='whole':
+            v_syn_sig = v_syn_sig_gl
+
+        elif griff_lim_type=='det':
+        '''
+
+
+
+    # griff_lim_type: None, 'whole' , 'det'(None=Griffin-Lim disabled)
+    # griff_lim_init: 'magphase', 'linear', 'min_phase', 'random'
+
 
     # HPF:---------------------------------------------------------------------     
     fc    = 60
@@ -2229,3 +2268,95 @@ def define_crossfade_params(fs):
         warnings.warn('Constant crsf_cf not tested nor tunned to synthesise at fs=%d Hz.' % fs)
 
     return crsf_cf, crsf_bw
+
+
+
+def griffin_lim(m_mag, v_shift, win_func=np.hanning, phase_init='random', niters=30):
+    '''
+    Pitch synchronous Griffin-Lim algorithm.
+    phase_init: 'random' (random phase), 'linear' (linear phase), 'min_phase' (minimum phase), or numpy 2D array (matrix) containing initial phase values.
+    '''
+
+    print('Starting Griffin-Lim. It could take a while...')
+
+    v_shift = lu.round_to_int(v_shift)
+    nfrms, fft_len_half = m_mag.shape
+    fft_len = 2 * (fft_len_half - 1)
+
+    # Initial phase set up:
+    if type(phase_init)==str:
+
+        if phase_init=='random':
+            m_phase = 2 * np.pi * (np.random.rand(nfrms, fft_len) - 0.5)
+
+        elif phase_init=='linear':
+            m_frms_zero = np.zeros((nfrms, fft_len))
+            m_frms_zero[:,(fft_len/2)] = 1.0
+            m_phase = np.angle(np.fft.fft(m_frms_zero))
+
+        elif phase_init=='min_phase':
+            m_mag_cmplx_min_ph = la.build_min_phase_from_mag_spec(m_mag)
+            m_phase = np.angle(m_mag_cmplx_min_ph)
+            m_phase = la.add_hermitian_half(m_phase, data_type='phase')
+
+    elif type(phase_init)==np.ndarray:
+        m_phase = la.add_hermitian_half(phase_init, data_type='phase')
+
+    # protection for indexes 0 and fft_len_half?
+
+    m_mag = la.add_hermitian_half(m_mag)
+    v_pm = la.shift_to_pm(v_shift)
+    for nxi in xrange(niters):
+
+        # Synthesis:
+        m_cmplx_sp = m_mag * np.exp(m_phase * 1j)
+        m_frms     = np.fft.ifft(m_cmplx_sp).real
+        v_sig = ola(m_frms, v_pm, win_func=None)
+
+        if nxi==(niters-1):
+            break
+
+        # Analysis:
+        l_frms, v_lens, v_pm_plus, v_shift_dummy, v_rights = windowing(v_sig, v_pm, win_func=win_func)
+        m_frms = la.frm_list_to_matrix(l_frms, v_shift, fft_len)
+        m_cmplx_sp = np.fft.fft(m_frms, n=fft_len)
+
+        # Update:
+        m_phase = np.angle(m_cmplx_sp)
+
+    return v_sig, la.remove_hermitian_half(m_phase)
+
+
+
+
+# From: https://github.com/candlewill/Griffin_lim/blob/master/utils/audio.py (Check license)
+'''
+import librosa
+def griffin_lim(S, fs, fft_len, niters=100):
+
+    frame_shift_ms  = 25
+    frame_length_ms = 50
+
+    def _stft(y):
+        #n_fft = (num_freq - 1) * 2
+        hop_length = int(frame_shift_ms / 1000 * fs)
+        win_length = int(frame_length_ms / 1000 * fs)
+        return librosa.stft(y=y, n_fft=fft_len, hop_length=hop_length, win_length=win_length)
+
+
+    def _istft(y):
+        hop_length = int(frame_shift_ms / 1000 * fs)
+        win_length = int(frame_length_ms / 1000 * fs)
+        return librosa.istft(y, hop_length=hop_length, win_length=win_length)
+
+    angles = np.exp(2j * np.pi * np.random.rand(*S.shape))
+    S_complex = np.abs(S).astype(np.complex)
+    for i in range(niters):
+        if i > 0:
+            angles = np.exp(1j * np.angle(_stft(y)))
+        y = _istft(S_complex * angles)
+    return y
+'''
+
+
+
