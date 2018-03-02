@@ -213,6 +213,9 @@ def bin_to_hz(v_bin, nFFT, fs):
 # m_sp_l: spectrum on the left. m_sp_r: spectrum on the right
 # TODO: Processing fo other freq scales, such as Mel.
 def spectral_crossfade(m_sp_l, m_sp_r, cut_off, bw, fs, freq_scale='hz'):
+    '''
+    m_sp_l and m_sp_r could be float or complex.
+    '''
 
     # Hz to bin:
     nFFThalf = m_sp_l.shape[1]

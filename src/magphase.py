@@ -794,6 +794,146 @@ def synthesis_from_compressed_type1(m_mag_mel_log, m_real_mel, m_imag_mel, v_lf0
 
 
 #==============================================================================
+def synthesis_from_compressed_type1_dev(m_mag_mel_log, m_real_mel, m_imag_mel, v_lf0, fs, fft_len=None,
+                                        hf_slope_coeff=1.0, b_voi_ap_win=True, b_fbank_mel=False, const_rate_ms=-1.0,
+                                                det_phase_type='magphase', griff_lim_type=None, griff_lim_init='magphase'):
+
+    '''
+    b_fbank_mel: If True, Mel compression done by the filter bank approach. Otherwise, it uses sptk mcep related funcs.
+    det_phase_type: 'magphase', 'min_phase', or 'linear'
+    griff_lim_type: None, 'whole' , 'det', 'whole' (None=Griffin-Lim disabled)
+    griff_lim_init: 'magphase', 'linear', 'min_phase', 'random'
+    '''
+
+    # Constants for spectral crossfade (in Hz):
+    crsf_cf, crsf_bw = define_crossfade_params(fs)
+    alpha = define_alpha(fs)
+    if fft_len==None:
+        fft_len = define_fft_len(fs)
+
+    fft_len_half = fft_len / 2 + 1
+    v_f0  = np.exp(v_lf0)
+    vb_voi = v_f0 > 1.0 # case voiced  (1.0 is used for safety)
+    nfrms, ncoeffs_mag = m_mag_mel_log.shape
+
+
+    # Magnitude mel-unwarp:----------------------------------------------------
+    if b_fbank_mel:
+        m_mag = np.exp(la.sp_mel_unwarp_fbank(m_mag_mel_log, fft_len_half, alpha=alpha))
+    else:
+        m_mag = np.exp(la.sp_mel_unwarp(m_mag_mel_log, fft_len_half, alpha=alpha, in_type='log'))
+
+    # Complex mel-unwarp:------------------------------------------------------
+    ncoeffs_comp = m_real_mel.shape[1]
+    f_intrp_real = interpolate.interp1d(np.arange(ncoeffs_comp), m_real_mel, kind='nearest', fill_value='extrapolate')
+    f_intrp_imag = interpolate.interp1d(np.arange(ncoeffs_comp), m_imag_mel, kind='nearest', fill_value='extrapolate')
+
+    m_real_mel = f_intrp_real(np.arange(ncoeffs_mag))
+    m_imag_mel = f_intrp_imag(np.arange(ncoeffs_mag))
+
+    m_real = la.sp_mel_unwarp(m_real_mel, fft_len_half, alpha=alpha, in_type='log')
+    m_imag = la.sp_mel_unwarp(m_imag_mel, fft_len_half, alpha=alpha, in_type='log')
+
+
+    # Constant to variable frame rate:-----------------------------------------
+    v_shift = f0_to_shift(v_f0, fs)
+    if const_rate_ms>0.0:
+        interp_type = 'linear' #'quadratic' , 'cubic'
+        v_shift, v_frm_locs_smpls = get_shifts_and_frm_locs_from_const_shifts(v_shift, const_rate_ms, fs, interp_type=interp_type)
+        m_mag  = interp_from_const_to_variable_rate(m_mag,    v_frm_locs_smpls, const_rate_ms, fs, interp_type=interp_type)
+        m_real = interp_from_const_to_variable_rate(m_real,   v_frm_locs_smpls, const_rate_ms, fs, interp_type=interp_type)
+        m_imag = interp_from_const_to_variable_rate(m_imag,   v_frm_locs_smpls, const_rate_ms, fs, interp_type=interp_type)
+        vb_voi = interp_from_const_to_variable_rate(vb_voi, v_frm_locs_smpls, const_rate_ms, fs, interp_type=interp_type) > 0.5
+        v_f0   = shift_to_f0(v_shift, vb_voi, fs, out='f0', b_smooth=False)
+        nfrms  = v_shift.size
+
+
+    # Mask Generation:============================================================
+    m_mask_per = np.zeros(m_mag.shape)
+    m_ones     = np.ones((np.sum(vb_voi.astype(int)), fft_len_half))
+    m_mask_per[vb_voi,:] = la.spectral_crossfade(m_ones, m_mask_per[vb_voi,:], crsf_cf, crsf_bw, fs, freq_scale='hz')
+
+    # Aperiodic Spectrum Generation:==============================================
+    # Noise Gen:
+    v_shift = v_shift.astype(int)
+    v_pm    = la.shift_to_pm(v_shift)
+
+    ns_len = v_pm[-1] + (v_pm[-1] - v_pm[-2])
+    v_ns   = np.random.uniform(-1, 1, ns_len)
+
+    # Noise Windowing:
+    l_ns_win_funcs = [ np.hanning ] * nfrms
+    if b_voi_ap_win:
+        for i in xrange(nfrms):
+            if vb_voi[i]:
+                l_ns_win_funcs[i] = voi_noise_window
+
+    l_frm_ns, v_lens, v_pm_plus, v_shift_dummy, v_rights = windowing(v_ns, v_pm, win_func=l_ns_win_funcs)   # Checkear!!
+
+    # Noise complex spectrum:
+    m_frm_ns  = la.frm_list_to_matrix(l_frm_ns, v_shift, fft_len)
+    m_frm_ns  = np.fft.fftshift(m_frm_ns, axes=1)
+    m_ns_cmplx_spec = la.remove_hermitian_half(np.fft.fft(m_frm_ns))
+
+    # Noise gain normalisation:
+    m_ns_mag  = np.absolute(m_ns_cmplx_spec)
+    noise_gain_voi = np.sqrt(np.mean(m_ns_mag[vb_voi,1:-1]**2))
+    noise_gain_unv = np.sqrt(np.mean(m_ns_mag[~vb_voi,1:-1]**2))
+
+    m_ns_cmplx_spec[vb_voi,:] /= noise_gain_voi
+    m_ns_cmplx_spec[~vb_voi,:] /= noise_gain_unv
+
+    # Spectral Stamping of magnitude to noise spectrum:
+    m_mag_min_phase_cmplx = la.build_min_phase_from_mag_spec(m_mag)
+    m_ap_cmplx_spec = m_ns_cmplx_spec * m_mag_min_phase_cmplx
+
+    # Periodic Spectrum Generation:============================================
+    m_per_cmplx_ph = m_real + m_imag * 1j
+
+    # Normalisation and protection:
+    m_per_cmplx_ph_mag = np.absolute(m_per_cmplx_ph)
+    m_per_cmplx_ph_mag[m_per_cmplx_ph_mag==0.0] = 1.0
+    m_per_cmplx_ph = m_per_cmplx_ph / m_per_cmplx_ph_mag
+
+    m_per_cmplx_spec = m_mag * m_per_cmplx_ph
+
+    # Waveform Generation:=====================================================
+    # Applying mask:
+    m_per_cmplx_spec *= m_mask_per
+    m_ap_cmplx_spec  *= 1 - m_mask_per
+
+    # Protection:
+    m_per_cmplx_spec[m_mask_per==0.0] = 0 + 0j
+    m_ap_cmplx_spec[m_mask_per==1.0]  = 0 + 0j
+
+    m_syn_cmplx = m_per_cmplx_spec + m_ap_cmplx_spec
+    m_syn_cmplx = la.add_hermitian_half(m_syn_cmplx, data_type='complex')
+
+    m_syn_frms = np.fft.ifft(m_syn_cmplx).real
+    m_syn_frms = np.fft.fftshift(m_syn_frms, axes=1)
+    v_syn_sig  = ola(m_syn_frms, v_pm, win_func=None)
+
+    if False:
+        plm(np.absolute(m_per_cmplx_spec))
+        plm(la.log(np.absolute(m_per_cmplx_spec)))
+
+        plm(np.absolute(m_ap_cmplx_spec))
+        plm(la.log(np.absolute(m_ap_cmplx_spec)))
+
+        plm(np.absolute(m_syn_cmplx))
+        plm(la.log(np.absolute(m_syn_cmplx)))
+        plm(np.angle(m_syn_cmplx))
+
+    # HPF - Output:============================================================
+    fc    = 60
+    order = 4
+    fc_norm   = fc / (fs / 2.0)
+    bc, ac    = signal.ellip(order,0.5 , 80, fc_norm, btype='highpass')
+    v_syn_sig = signal.lfilter(bc, ac, v_syn_sig)
+
+    return v_syn_sig
+
+#==============================================================================
 # NOTE: "v_frm_locs_smpls" are the locations of the target frames (centres) in the constant rate data to sample from.
 # This function should be used along with the function "interp_from_const_to_variable_rate"
 def get_shifts_and_frm_locs_from_const_shifts(v_shift_c_rate, frm_rate_ms, fs, interp_type='linear'):
@@ -909,15 +1049,15 @@ def synthesis_from_compressed_type2(m_mag_mel_log, m_real_mel, m_imag_mel, v_lf0
     # Norm gain:
     m_ns_mag  = np.absolute(m_ns_cmplx)
     rms_noise = np.sqrt(np.mean(m_ns_mag**2)) # checkear!!!!
-    m_ap_mask = np.ones(m_ns_mag.shape)
-    m_ap_mask = m_mag * m_ap_mask / rms_noise
+    m_ap_mag_smth = np.ones(m_ns_mag.shape)
+    m_ap_mag_smth = m_mag * m_ap_mag_smth / rms_noise
 
     m_zeros = np.zeros((nfrms, fft_len_half))
-    m_ap_mask[vb_voi,:] = la.spectral_crossfade(m_zeros[vb_voi,:], m_ap_mask[vb_voi,:], crsf_cf, crsf_bw, fs, freq_scale='hz')
+    m_ap_mag_smth[vb_voi,:] = la.spectral_crossfade(m_zeros[vb_voi,:], m_ap_mag_smth[vb_voi,:], crsf_cf, crsf_bw, fs, freq_scale='hz')
 
     # HF - enhancement:
     v_slope  = np.linspace(1, hf_slope_coeff, num=fft_len_half)
-    m_ap_mask[~vb_voi,:] = m_ap_mask[~vb_voi,:] * v_slope
+    m_ap_mag_smth[~vb_voi,:] = m_ap_mag_smth[~vb_voi,:] * v_slope
 
     # Det-Mask:----------------------------------------------------------------
     m_det_mask = m_mag
@@ -925,7 +1065,7 @@ def synthesis_from_compressed_type2(m_mag_mel_log, m_real_mel, m_imag_mel, v_lf0
     m_det_mask[vb_voi,:]  = la.spectral_crossfade(m_det_mask[vb_voi,:], m_zeros[vb_voi,:], crsf_cf, crsf_bw, fs, freq_scale='hz')
 
     # Applying masks:----------------------------------------------------------
-    m_ap_cmplx  = m_ap_mask  * m_ns_cmplx
+    m_ap_cmplx  = m_ap_mag_smth  * m_ns_cmplx
     m_det_cmplx = m_real + m_imag * 1j
 
     # Protection:
