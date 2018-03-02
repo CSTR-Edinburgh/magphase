@@ -871,8 +871,8 @@ def synthesis_from_compressed_type1_dev(m_mag_mel_log, m_real_mel, m_imag_mel, v
     l_frm_ns, v_lens, v_pm_plus, v_shift_dummy, v_rights = windowing(v_ns, v_pm, win_func=l_ns_win_funcs)   # Checkear!!
 
     # Noise complex spectrum:
-    m_frm_ns  = la.frm_list_to_matrix(l_frm_ns, v_shift, fft_len)
-    m_frm_ns  = np.fft.fftshift(m_frm_ns, axes=1)
+    m_frm_ns = la.frm_list_to_matrix(l_frm_ns, v_shift, fft_len)
+    m_frm_ns = np.fft.fftshift(m_frm_ns, axes=1)
     m_ns_cmplx_spec = la.remove_hermitian_half(np.fft.fft(m_frm_ns))
 
     # Noise gain normalisation:
@@ -906,12 +906,12 @@ def synthesis_from_compressed_type1_dev(m_mag_mel_log, m_real_mel, m_imag_mel, v
     m_per_cmplx_spec[m_mask_per==0.0] = 0 + 0j
     m_ap_cmplx_spec[m_mask_per==1.0]  = 0 + 0j
 
+    # Synthesis:
     m_syn_cmplx = m_per_cmplx_spec + m_ap_cmplx_spec
     m_syn_cmplx = la.add_hermitian_half(m_syn_cmplx, data_type='complex')
-
-    m_syn_frms = np.fft.ifft(m_syn_cmplx).real
-    m_syn_frms = np.fft.fftshift(m_syn_frms, axes=1)
-    v_syn_sig  = ola(m_syn_frms, v_pm, win_func=None)
+    m_syn_frms  = np.fft.ifft(m_syn_cmplx).real
+    m_syn_frms  = np.fft.fftshift(m_syn_frms, axes=1)
+    v_syn_sig   = ola(m_syn_frms, v_pm, win_func=None)
 
     if False:
         plm(np.absolute(m_per_cmplx_spec))
