@@ -899,6 +899,7 @@ def synthesis_from_compressed_type1(m_mag_mel_log, m_real_mel, m_imag_mel, v_lf0
     m_ap_cmplx_spec = m_ns_cmplx_spec * m_mag_min_phase_cmplx
 
     # Debug. Unv segments - compensation filter:
+    # (NOTE: This only has been tested with fs=48kHz and alpha=0.77)
     #v_line = la.db(la.build_mel_curve(0.60, fft_len_half, amp=3.0), b_inv=True)
     #v_line = la.db(la.build_mel_curve(alpha, fft_len_half, amp=np.pi) - np.pi, b_inv=True)
     v_line = la.db(la.build_mel_curve(alpha, fft_len_half, amp=3.5) - 3.5, b_inv=True)
@@ -925,6 +926,7 @@ def synthesis_from_compressed_type1(m_mag_mel_log, m_real_mel, m_imag_mel, v_lf0
         m_per_cmplx_spec  = la.build_min_phase_from_mag_spec(m_mag)
 
     # Debug. Voi segments - compensation filter: # Not really noticeable.
+    # (NOTE: This only has been tested with fs=48kHz and alpha=0.77)
     v_line = la.db(la.build_mel_curve(0.6, fft_len_half, amp=2.0), b_inv=True)
     m_per_cmplx_spec[v_voi,:] *= v_line
 
