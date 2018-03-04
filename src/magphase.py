@@ -96,6 +96,7 @@ def windowing(v_sig, v_pm, win_func=np.hanning):
         left_len  = pm - left_lim
         right_len = right_lim - pm
         
+
         # Apply window:
         if isinstance(win_func, list):
             v_win = la.gen_non_symmetric_win(left_len, right_len, win_func[f])  
@@ -811,6 +812,9 @@ def synthesis_from_compressed_type1(m_mag_mel_log, m_real_mel, m_imag_mel, v_lf0
     fft_len_half = fft_len / 2 + 1
     nfrms, ncoeffs_mag = m_mag_mel_log.shape
 
+    # Debug - compensation filter:
+    #m_mag_mel_log = post_filter(m_mag_mel_log, fs, av_len_at_zero=3, av_len_at_nyq=3, boost_at_zero=1.0, boost_at_nyq=1.4)
+
     # Unwarp and unlog features:===============================================
     # F0:
     v_f0    = np.exp(v_lf0)
@@ -848,7 +852,7 @@ def synthesis_from_compressed_type1(m_mag_mel_log, m_real_mel, m_imag_mel, v_lf0
     # Mask Generation:============================================================
     m_mask_per = np.zeros(m_mag.shape)
     m_ones     = np.ones((np.sum(v_voi.astype(int)), fft_len_half))
-    m_mask_per[v_voi,:] = la.spectral_crossfade(m_ones, m_mask_per[v_voi,:], crsf_cf, crsf_bw, fs, freq_scale='hz')
+    m_mask_per[v_voi,:] = la.spectral_crossfade(m_ones, m_mask_per[v_voi,:], crsf_cf, crsf_bw, fs, freq_scale='hz', win_func=np.hanning)
 
     # Aperiodic Spectrum Generation:==============================================
     # Noise Gen:
@@ -874,15 +878,34 @@ def synthesis_from_compressed_type1(m_mag_mel_log, m_real_mel, m_imag_mel, v_lf0
 
     # Noise gain normalisation:
     m_ns_mag  = np.absolute(m_ns_cmplx_spec)
-    noise_gain_voi = np.sqrt(np.mean(m_ns_mag[v_voi,1:-1]**2))
-    noise_gain_unv = np.sqrt(np.mean(m_ns_mag[~v_voi,1:-1]**2))
 
-    m_ns_cmplx_spec[v_voi,:] /= noise_gain_voi
-    m_ns_cmplx_spec[~v_voi,:] /= noise_gain_unv
+    # Debug:
+    #noise_gain_voi = np.sqrt(np.mean(m_ns_mag[v_voi,1:-1]**2)) / 1.5
+    #noise_gain_unv = np.sqrt(np.mean(m_ns_mag[~v_voi,1:-1]**2))
+
+    noise_gain_voi = np.sqrt(np.exp(np.mean(la.log(m_ns_mag[v_voi,1:-1])**2)))
+    noise_gain_unv = np.sqrt(np.exp(np.mean(la.log(m_ns_mag[~v_voi,1:-1])**2)))
+
+    m_ns_cmplx_spec[v_voi,:]  = m_ns_cmplx_spec[v_voi,:] /  noise_gain_voi
+    m_ns_cmplx_spec[~v_voi,:] = m_ns_cmplx_spec[~v_voi,:] / noise_gain_unv
 
     # Spectral Stamping of magnitude to noise spectrum:
-    m_mag_min_phase_cmplx = la.build_min_phase_from_mag_spec(m_mag)
+    b_ap_min_phase_mag = False
+    if b_ap_min_phase_mag:
+        m_mag_min_phase_cmplx = la.build_min_phase_from_mag_spec(m_mag)
+    else:
+        m_mag_min_phase_cmplx = m_mag
+
     m_ap_cmplx_spec = m_ns_cmplx_spec * m_mag_min_phase_cmplx
+
+    # Debug. Unv segments - compensation filter:
+    #v_line = la.db(la.build_mel_curve(0.60, fft_len_half, amp=3.0), b_inv=True)
+    #v_line = la.db(la.build_mel_curve(alpha, fft_len_half, amp=np.pi) - np.pi, b_inv=True)
+    v_line = la.db(la.build_mel_curve(alpha, fft_len_half, amp=3.5) - 3.5, b_inv=True)
+    #v_line = la.db(la.build_mel_curve(0.66, fft_len_half, amp=np.pi) - np.pi, b_inv=True)
+    m_ap_cmplx_spec[~v_voi,:] *= v_line
+
+
 
     # Periodic Spectrum Generation:============================================
     if per_phase_type=='magphase':
@@ -901,11 +924,16 @@ def synthesis_from_compressed_type1(m_mag_mel_log, m_real_mel, m_imag_mel, v_lf0
     elif per_phase_type=='min_phase':
         m_per_cmplx_spec  = la.build_min_phase_from_mag_spec(m_mag)
 
+    # Debug. Voi segments - compensation filter: # Not really noticeable.
+    v_line = la.db(la.build_mel_curve(0.6, fft_len_half, amp=2.0), b_inv=True)
+    m_per_cmplx_spec[v_voi,:] *= v_line
+
 
     # Waveform Generation:=====================================================
     # Applying mask:
-    m_per_cmplx_spec *= m_mask_per
-    m_ap_cmplx_spec  *= 1 - m_mask_per
+    crsf_curve_fact = 0.5 # Spectral crossfade courve factor
+    m_per_cmplx_spec *= (m_mask_per**crsf_curve_fact)
+    m_ap_cmplx_spec  *= ((1 - m_mask_per)**crsf_curve_fact)
 
     # Protection:
     m_per_cmplx_spec[m_mask_per==0.0] = 0 + 0j
@@ -2460,9 +2488,17 @@ def griffin_lim(m_mag, v_shift, win_func=np.hanning, phase_init='random', niters
 
     return v_sig, la.remove_hermitian_half(m_phase)
 
+'''
+def welch_win(length):
+    term = (length - 1) / 2.0
+    v_win = 1 - (((np.arange(length) - term) / term)**2)
+    return v_win
 
 
-
+def crossfade_win(length):
+    #return (np.hanning(length)**0.5)
+    return (np.hanning(length)**0.3)
+'''
 # From: https://github.com/candlewill/Griffin_lim/blob/master/utils/audio.py (Check license)
 '''
 import librosa

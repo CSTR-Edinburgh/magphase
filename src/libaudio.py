@@ -212,7 +212,7 @@ def bin_to_hz(v_bin, nFFT, fs):
 #------------------------------------------------------------------------------
 # m_sp_l: spectrum on the left. m_sp_r: spectrum on the right
 # TODO: Processing fo other freq scales, such as Mel.
-def spectral_crossfade(m_sp_l, m_sp_r, cut_off, bw, fs, freq_scale='hz'):
+def spectral_crossfade(m_sp_l, m_sp_r, cut_off, bw, fs, freq_scale='hz', win_func=np.hanning):
     '''
     m_sp_l and m_sp_r could be float or complex.
     '''
@@ -225,7 +225,7 @@ def spectral_crossfade(m_sp_l, m_sp_r, cut_off, bw, fs, freq_scale='hz'):
 
     # Gen short windows:
     bw_bin       = bin_r - bin_l
-    v_win_shrt   = np.hanning(2*bw_bin + 1)
+    v_win_shrt   = win_func(2*bw_bin + 1)
     v_win_shrt_l = v_win_shrt[bw_bin:]
     v_win_shrt_r = v_win_shrt[:bw_bin+1]
     
@@ -959,6 +959,14 @@ def build_min_phase_from_mag_spec(m_mag):
 
     return m_mag_cmplx_min_ph
 
+def build_mel_curve(alpha, nbins, amp=np.pi):
+    v_bins  = np.linspace(0, np.pi, nbins)
+    v_bins_warp = np.arctan(  (1-alpha**2) * np.sin(v_bins) / ((1+alpha**2)*np.cos(v_bins) - 2*alpha) )
+    v_bins_warp[v_bins_warp < 0] += np.pi
+
+    v_bins_warp = v_bins_warp * (amp/np.pi)
+
+    return v_bins_warp
 
 
 '''
