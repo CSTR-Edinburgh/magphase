@@ -2043,6 +2043,95 @@ def post_filter(m_mag_mel_log, fs, av_len_at_zero=None, av_len_at_nyq=None, boos
 
 
 
+def post_filter_dev(m_mag_mel_log, fs, av_len_at_zero=None, av_len_at_nyq=None, boost_at_zero=None, boost_at_nyq=None):
+
+    nfrms, nbins_mel = m_mag_mel_log.shape
+    if nbins_mel!=60:
+        warnings.warn('Post-filter: It has been only tested with 60 dimensional mag data. If you use another dimension, the result may be suboptimal.')
+
+    # Defaults in case options are not provided by the user:
+    if fs==48000:
+        if av_len_at_zero is None:
+            av_len_at_zero = lu.round_to_int(11.0 * (nbins_mel / 60.0))
+
+        if av_len_at_nyq is None:
+            av_len_at_nyq = lu.round_to_int(3.0  * (nbins_mel / 60.0))
+
+        if boost_at_zero is None:
+            boost_at_zero = 1.8 # 2.0
+
+        if boost_at_nyq is None:
+            boost_at_nyq = 2.0 # 6.0
+
+    elif fs==16000:
+        if any(option is None for option in [av_len_at_zero, av_len_at_nyq, boost_at_zero, boost_at_nyq]):
+            warnings.warn('Post-filter: The default parameters for 16kHz sample rate have not being tunned.')
+
+        if av_len_at_zero is None:
+            av_len_at_zero = lu.round_to_int(9.0 * (nbins_mel / 60.0))
+
+        if av_len_at_nyq is None:
+            av_len_at_nyq = lu.round_to_int(12.0  * (nbins_mel / 60.0))
+
+        if boost_at_zero is None:
+            boost_at_zero = 2.0 # 2.0
+
+        if boost_at_nyq is None:
+            boost_at_nyq = 1.6 # 1.6
+
+    else: # No default values for other sample rates yet.
+        if any(option is None for option in [av_len_at_zero, av_len_at_nyq, boost_at_zero, boost_at_nyq]):
+            raise ValueError('Post-filter: It has only been tested with 16kHz and 48kHz sample rates.' + \
+                '\nProvide your own values for the options: av_len_at_zero, av_len_at_nyq, boost_at_zero,' + \
+                '\nboost_at_nyq if you use another sample rate')
+
+    # Body:
+    v_ave  = np.zeros(nbins_mel)
+    v_nx   = np.arange(np.floor(av_len_at_zero/2), nbins_mel - np.floor(av_len_at_nyq/2)).astype(int)
+    v_lens = np.linspace(av_len_at_zero, av_len_at_nyq, v_nx.size)
+    v_lens = (2*np.ceil(v_lens/2) - 1).astype(int)
+
+    m_mag_mel_log_enh = np.zeros(m_mag_mel_log.shape)
+
+    # Debug:
+    m_mag_mel_log_norm = np.zeros(m_mag_mel_log.shape)
+
+    for nxf in xrange(nfrms):
+
+        v_mag_mel_log = m_mag_mel_log[nxf,:]
+
+        # Average:
+        for nxb in v_nx:
+            halflen    = np.floor(v_lens[nxb-v_nx[0]]/2).astype(int)
+            v_ave[nxb] = np.mean(v_mag_mel_log[(nxb-halflen):(nxb+halflen+1)])
+
+        # Fixing boundaries:
+        v_ave[:v_nx[0]]  = v_ave[v_nx[0]]
+        v_ave[v_nx[-1]:] = v_ave[v_nx[-1]]
+
+        # Substracting average:
+        v_mag_mel_log_norm = v_mag_mel_log - v_ave
+
+        # Debug:
+        m_mag_mel_log_norm[nxf,:] = v_mag_mel_log_norm
+
+        # Debug:
+        if False:
+            from libplot import lp; lp.figure(); lp.plot(v_mag_mel_log); lp.plot(v_ave); lp.plot(v_mag_mel_log_norm); lp.grid(); lp.show()
+
+        # Enhance:
+        v_tilt_fact = np.linspace(boost_at_zero, boost_at_nyq, nbins_mel)
+        v_mag_mel_log_enh = (v_mag_mel_log_norm * v_tilt_fact) + v_ave
+        v_mag_mel_log_enh[0]  = v_mag_mel_log[0]
+        v_mag_mel_log_enh[-1] = v_mag_mel_log[-1]
+
+        # Saving:
+        m_mag_mel_log_enh[nxf,:] = v_mag_mel_log_enh
+
+    return m_mag_mel_log_enh, m_mag_mel_log_norm
+    #return m_mag_mel_log_enh
+
+
 def format_for_modelling(m_mag, m_real, m_imag, v_f0, fs, nbins_mel=60, nbins_phase=45, b_fbank_mel=False):
     '''
     b_fbank_mel: If True, Mel compression done by the filter bank approach. Otherwise, it uses sptk mcep related funcs.
