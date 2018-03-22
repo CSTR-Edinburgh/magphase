@@ -833,56 +833,6 @@ def convert_label_state_align_to_var_frame_rate(in_lab_st_file, v_dur_state, out
     return
 
 
-def build_mel_curve(alpha, nbins, amp=np.pi):
-    v_bins  = np.linspace(0, np.pi, nbins)
-    v_bins_warp = np.arctan(  (1-alpha**2) * np.sin(v_bins) / ((1+alpha**2)*np.cos(v_bins) - 2*alpha) )
-    v_bins_warp[v_bins_warp < 0] += np.pi
-
-    v_bins_warp = v_bins_warp * (amp/np.pi)
-
-    return v_bins_warp
-
-def apply_average_fbank(m_mag, n_bands, v_bins_warp):
-    '''
-    Applies an average filter bank.
-    n_bands: number of output bands.
-    v_bins_warp: Mapping from input bins to output (monotonically crescent from 0 to any positive number).
-                 Requirement: length = m_mag.shape[1]
-    '''
-
-    nfrms, nbins = m_mag.shape
-
-    # Bands gen:
-    maxval = v_bins_warp[-1]
-    v_cntrs_mel   = np.linspace(0, maxval, n_bands)
-    v_middles_mel = v_cntrs_mel + 0.5*(v_cntrs_mel[1] - v_cntrs_mel[0])
-    v_middles_mel = v_middles_mel[:-1]
-
-    # To linear frequency:
-    f_interp  = interpolate.interp1d(v_bins_warp, np.arange(nbins), kind='quadratic')
-    v_cntrs   = lu.round_to_int(f_interp(v_cntrs_mel))
-    v_middles = lu.round_to_int(f_interp(v_middles_mel))
-
-    # Compress:
-    m_mag_mel = np.zeros((nfrms, n_bands))
-    v_middles_ext = np.r_[0, v_middles, v_cntrs[-1]]
-
-    for nxf in xrange(nfrms):
-        v_curr_mag = m_mag[nxf,:]
-        for nxb in xrange(n_bands):
-            m_mag_mel[nxf,nxb] = np.mean(v_curr_mag[v_middles_ext[nxb]:v_middles_ext[nxb+1]])
-
-    return m_mag_mel
-
-def sp_mel_warp_fbank(m_mag, n_melbands, alpha=0.77):
-
-    nfrms, nbins = m_mag.shape
-    v_bins_warp  = build_mel_curve(alpha, nbins)
-    m_mag_mel    = np.exp(apply_average_fbank(log(m_mag), n_melbands, v_bins_warp))
-
-    return m_mag_mel
-
-
 
 '''
 def sp_mel_warp_fbank(m_mag, n_melbands, alpha=0.77):
@@ -922,9 +872,58 @@ def sp_mel_warp_fbank(m_mag, n_melbands, alpha=0.77):
     return m_mag_mel
 '''
 
+def build_mel_curve(alpha, nbins, amp=np.pi):
+    v_bins  = np.linspace(0, np.pi, nbins)
+    v_bins_warp = np.arctan(  (1-alpha**2) * np.sin(v_bins) / ((1+alpha**2)*np.cos(v_bins) - 2*alpha) )
+    v_bins_warp[v_bins_warp < 0] += np.pi
+
+    v_bins_warp = v_bins_warp * (amp/np.pi)
+
+    return v_bins_warp
+
+def apply_average_fbank(m_mag, v_bins_warp, n_bands):
+    '''
+    Applies an average filter bank.
+    n_bands: number of output bands.
+    v_bins_warp: Mapping from input bins to output (monotonically crescent from 0 to any positive number).
+                 Requirement: length = m_mag.shape[1]. If wanted, use build_mel_curve(...) to construct it.
+    '''
+
+    nfrms, nbins = m_mag.shape
+
+    # Bands gen:
+    maxval = v_bins_warp[-1]
+    v_cntrs_mel   = np.linspace(0, maxval, n_bands)
+    v_middles_mel = v_cntrs_mel + 0.5*(v_cntrs_mel[1] - v_cntrs_mel[0])
+    v_middles_mel = v_middles_mel[:-1]
+
+    # To linear frequency:
+    f_interp  = interpolate.interp1d(v_bins_warp, np.arange(nbins), kind='quadratic')
+    v_cntrs   = lu.round_to_int(f_interp(v_cntrs_mel))
+    v_middles = lu.round_to_int(f_interp(v_middles_mel))
+
+    # Compress:
+    m_mag_mel = np.zeros((nfrms, n_bands))
+    v_middles_ext = np.r_[0, v_middles, v_cntrs[-1]]
+
+    for nxf in xrange(nfrms):
+        v_curr_mag = m_mag[nxf,:]
+        for nxb in xrange(n_bands):
+            m_mag_mel[nxf,nxb] = np.mean(v_curr_mag[v_middles_ext[nxb]:v_middles_ext[nxb+1]])
+
+    return m_mag_mel
+
+def sp_mel_warp_fbank(m_mag, n_melbands, alpha=0.77):
+
+    nfrms, nbins = m_mag.shape
+    v_bins_warp  = build_mel_curve(alpha, nbins)
+    m_mag_mel    = np.exp(apply_average_fbank(log(m_mag), v_bins_warp, n_melbands))
+
+    return m_mag_mel
+
 def sp_mel_unwarp_fbank(m_mag_mel, nbins, alpha=0.77):
 
-    nfrms, n_melbands = m_mag_mel.shape
+    #nfrms, n_melbands = m_mag_mel.shape
 
     # All of this to compute v_cntrs. It could be coded much more efficiently.----------------------
     # Bins warping:
@@ -932,7 +931,9 @@ def sp_mel_unwarp_fbank(m_mag_mel, nbins, alpha=0.77):
     #v_bins_warp = np.arctan(  (1-alpha**2) * np.sin(v_bins) / ((1+alpha**2)*np.cos(v_bins) - 2*alpha) )
     #v_bins_warp[v_bins_warp < 0] += np.pi
     v_bins_warp = build_mel_curve(alpha, nbins, amp=np.pi)
+    m_mag = unwarp_from_fbank(m_mag_mel, nbins, v_bins_warp)
 
+    '''
     # Bands gen:
     maxval = v_bins_warp[-1]
     v_cntrs_mel = np.linspace(0, maxval, n_melbands)
@@ -948,10 +949,38 @@ def sp_mel_unwarp_fbank(m_mag_mel, nbins, alpha=0.77):
         f_interp = interpolate.interp1d(v_cntrs, m_mag_mel[nxf,:], kind='quadratic')
         #f_interp = interpolate.interp1d(v_cntrs, m_mag_mel[nxf,:], kind='linear')
         m_mag[nxf,:] = f_interp(v_bins)
+    '''
 
     return m_mag
 
 
+def unwarp_from_fbank(m_mag_mel, v_bins_warp):
+    '''
+    n_bins: number of frequency bins (i.e., Hz).
+    v_bins_warp: Mapping from input bins to output (monotonically crescent from 0 to any positive number).
+                 Requirement: length = m_mag.shape[1]. If wanted, use build_mel_curve(...) to construct it.
+    '''
+
+    nfrms, n_melbands = m_mag_mel.shape
+    n_bins = v_bins_warp.size
+
+    # Bands gen:
+    maxval = v_bins_warp[-1]
+    v_cntrs_mel = np.linspace(0, maxval, n_melbands)
+
+    # To linear frequency:
+    f_interp  = interpolate.interp1d(v_bins_warp, np.arange(n_bins), kind='quadratic')
+    v_cntrs   = lu.round_to_int(f_interp(v_cntrs_mel))
+
+    # Process per frame:
+    v_bins = np.arange(n_bins)
+    m_mag = np.zeros((nfrms, n_bins))
+    for nxf in xrange(nfrms):
+        f_interp = interpolate.interp1d(v_cntrs, m_mag_mel[nxf,:], kind='quadratic')
+        #f_interp = interpolate.interp1d(v_cntrs, m_mag_mel[nxf,:], kind='linear')
+        m_mag[nxf,:] = f_interp(v_bins)
+
+    return m_mag
 
 #-------------------------------------------------------------------------------------------------------
 # 1-D Smoothing by convolution: (from ScyPy Cookbook - not checked yet!)-----------------------------

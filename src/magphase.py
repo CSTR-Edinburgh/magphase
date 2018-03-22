@@ -830,13 +830,15 @@ def synthesis_from_compressed_type1_with_phase_comp(m_mag_mel_log, m_real_mel, m
         m_mag = np.exp(la.sp_mel_unwarp(m_mag_mel_log, fft_len_half, alpha=alpha, in_type='log'))
 
     # Phase feats mel-unwarp:
-    # AQUI VOY!!
-
-
-
-
+    bin_r   = lu.round_to_int(la.hz_to_bin(crsf_cf + crsf_bw/2.0, fft_len, fs))
+    v_bins_mel  = la.build_mel_curve(alpha, fft_len_half)[:bin_r]
+    m_real_shrt = la.unwarp_from_fbank(m_real_mel, v_bins_mel)
+    m_imag_shrt = la.unwarp_from_fbank(m_imag_mel, v_bins_mel)
+    m_real = np.hstack((m_real_shrt, m_real_shrt[:,-1][:,None] + np.zeros((nfrms, fft_len_half-bin_r))))
+    m_imag = np.hstack((m_imag_shrt, m_imag_shrt[:,-1][:,None] + np.zeros((nfrms, fft_len_half-bin_r))))
 
     #-------------------------------------------------------------------------------
+    '''
     ncoeffs_comp = m_real_mel.shape[1]
     f_intrp_real = interpolate.interp1d(np.arange(ncoeffs_comp), m_real_mel, kind='nearest', fill_value='extrapolate')
     f_intrp_imag = interpolate.interp1d(np.arange(ncoeffs_comp), m_imag_mel, kind='nearest', fill_value='extrapolate')
@@ -846,7 +848,7 @@ def synthesis_from_compressed_type1_with_phase_comp(m_mag_mel_log, m_real_mel, m
 
     m_real = la.sp_mel_unwarp(m_real_mel, fft_len_half, alpha=alpha, in_type='log')
     m_imag = la.sp_mel_unwarp(m_imag_mel, fft_len_half, alpha=alpha, in_type='log')
-
+    '''
 
 
 
@@ -2331,7 +2333,6 @@ def format_for_modelling_phase_comp(m_mag, m_real, m_imag, v_f0, fs, nbins_mel=6
 
     m_mag_mel_log =  la.log(m_mag_mel)
 
-
     # Phase feats to Mel-phase (compression):
     crsf_cf, crsf_bw = define_crossfade_params(fs)
     fft_len_half = m_mag.shape[1]
@@ -2341,10 +2342,18 @@ def format_for_modelling_phase_comp(m_mag, m_real, m_imag, v_f0, fs, nbins_mel=6
     m_imag_shrt = m_imag[:,:bin_r]
 
     v_bins_mel = la.build_mel_curve(alpha, fft_len_half)[:bin_r]
-    m_real_mel = la.apply_average_fbank(m_real_shrt, nbins_phase, v_bins_mel)
-    m_imag_mel = la.apply_average_fbank(m_imag_shrt, nbins_phase, v_bins_mel)
+    m_real_mel = la.apply_average_fbank(m_real_shrt, v_bins_mel, nbins_phase)
+    m_imag_mel = la.apply_average_fbank(m_imag_shrt, v_bins_mel, nbins_phase)
 
+    # Debug (reconstruction):
+    #nfrms = m_real_mel.shape[0]
+    #v_bins_mel_rec  = la.build_mel_curve(alpha, fft_len_half)[:bin_r]
+    #m_real_shrt_rec = la.unwarp_from_fbank(m_real_mel, v_bins_mel_rec)
+    #m_real_rec = np.hstack((m_real_shrt_rec, m_real_shrt_rec[:,-1][:,None] * np.ones((nfrms, fft_len_half-bin_r))))
 
+    if False:
+        nx=160; figure(); plot(m_real[nx,:]); plot(m_real_rec[nx,:]); grid()
+        nx=160; figure(); plot(m_real_mel[nx,:]); grid()
 
     # -----------------------------------------------
     #m_imag_mel = la.sp_mel_warp(m_imag, nbins_mel, alpha=alpha, in_type=2)
@@ -2588,8 +2597,8 @@ def analysis_compressed_type1(wav_file, fft_len=None, out_dir=None, nbins_mel=60
     return m_mag_mel_log, m_real_mel, m_imag_mel, v_lf0_smth, v_shift, fs, fft_len
 
 
-def analysis_compressed_type1_with_phase_comp_defi(wav_file, fft_len=None, out_dir=None, nbins_mel=60,
-                                                 nbins_phase=45, const_rate_ms=-1.0, n_phase_cmp_coeffs=10):
+def analysis_compressed_type1_with_phase_comp_defi(wav_file, fft_len=None, out_dir=None,
+                                                    nbins_mel=60, nbins_phase=10, const_rate_ms=-1.0):
 
     '''
 
