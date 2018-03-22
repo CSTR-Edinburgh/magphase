@@ -19,13 +19,8 @@ from scipy import interpolate
 def phase_feats_mel_unwarp(m_ph_mel, alpha, ncoeffs_mag):
     ncoeffs_cmp = m_ph_mel.shape[1]
     f_intrp_ph = interpolate.interp1d(np.arange(ncoeffs_cmp), m_ph_mel, kind='nearest', fill_value='extrapolate')
-    #f_intrp_imag = interpolate.interp1d(np.arange(ncoeffs_cmp), m_imag_mel, kind='nearest', fill_value='extrapolate')
-
     m_ph_mel = f_intrp_ph(np.arange(ncoeffs_mag))
-    #m_imag_mel = f_intrp_imag(np.arange(ncoeffs_mag))
-
     m_ph = la.sp_mel_unwarp(m_ph_mel, fft_len_half, alpha=alpha, in_type='log')
-    #m_imag = la.sp_mel_unwarp(m_imag_mel, fft_len_half, alpha=alpha, in_type='log')
 
     return m_ph
 
@@ -42,7 +37,7 @@ if __name__ == '__main__':
     fs = 48000
     alpha = 0.77
 
-    n_cmp_coeffs = 1
+    n_cmp_coeffs = 10
 
     # Setup:========================================================================================
     lu.mkdir(wavs_syn_dir)
@@ -60,13 +55,14 @@ if __name__ == '__main__':
 
     # Phase compression:============================================================================
     n_ph_coeffs = 45
+    m_real_rcep = la.rceps(m_real_mel, in_type='log', out_type='compact')[:,:n_cmp_coeffs]
 
-    m_real_rcep = la.rceps(m_real_mel, in_type='log', out_type='compact')
-    m_real_mel_cmp = la.remove_hermitian_half(np.fft.fft(m_real_rcep[:,:n_cmp_coeffs], n=2*(n_ph_coeffs-1)).real)
+    m_real_mel_cmp = la.remove_hermitian_half(np.fft.fft(m_real_rcep, n=2*(n_ph_coeffs-1)).real)
     m_real_cmp = phase_feats_mel_unwarp(m_real_mel_cmp, alpha, 60)
 
-    m_imag_rcep = la.rceps(m_imag_mel, in_type='log', out_type='compact')
-    m_imag_mel_cmp = la.remove_hermitian_half(np.fft.fft(m_imag_rcep[:,:n_cmp_coeffs], n=2*(n_ph_coeffs-1)).real)
+    m_imag_rcep = la.rceps(m_imag_mel, in_type='log', out_type='compact')[:,:n_cmp_coeffs]
+
+    m_imag_mel_cmp = la.remove_hermitian_half(np.fft.fft(m_imag_rcep, n=2*(n_ph_coeffs-1)).real)
     m_imag_cmp = phase_feats_mel_unwarp(m_imag_mel_cmp, alpha, 60)
 
     if False: # PLOTS:
@@ -95,12 +91,13 @@ if __name__ == '__main__':
 
 
     # Synthesis:====================================================================================
+    '''
     v_syn_sig = mp.synthesis_from_compressed_type1(m_mag_mel_log, m_real_mel, m_imag_mel, v_lf0, fs)
     la.write_audio_file(path.join(wavs_syn_dir, filename + '.wav'), v_syn_sig, fs)
 
     v_syn_sig_ph_cmp = mp.synthesis_from_compressed_type1(m_mag_mel_log, m_real_mel_cmp, m_imag_mel_cmp, v_lf0, fs)
     la.write_audio_file(path.join(wavs_syn_dir, filename + '_ph_cmp_1.wav'), v_syn_sig_ph_cmp, fs)
-
+    '''
 
 
 
