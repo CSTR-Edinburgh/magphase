@@ -2342,8 +2342,8 @@ def format_for_modelling_phase_comp(m_mag, m_real, m_imag, v_f0, fs, nbins_mel=6
     m_imag_shrt = m_imag[:,:bin_r]
 
     v_bins_mel = la.build_mel_curve(alpha, fft_len_half)[:bin_r]
-    m_real_mel = la.apply_average_fbank(m_real_shrt, v_bins_mel, nbins_phase)
-    m_imag_mel = la.apply_average_fbank(m_imag_shrt, v_bins_mel, nbins_phase)
+    m_real_mel = la.apply_fbank(m_real_shrt, v_bins_mel, nbins_phase)
+    m_imag_mel = la.apply_fbank(m_imag_shrt, v_bins_mel, nbins_phase)
 
     # Debug (reconstruction):
     #nfrms = m_real_mel.shape[0]
