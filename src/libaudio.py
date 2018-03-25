@@ -885,7 +885,7 @@ def build_mel_curve(alpha, nbins, amp=np.pi):
 
     return v_bins_warp
 
-def apply_fbank(m_mag, v_bins_warp, nbands, win_func=np.hanning):
+def apply_fbank(m_mag, v_bins_warp, nbands, win_func=np.hanning, mode='average'):
     '''
     Applies an average filter bank.
     nbands: number of output bands.
@@ -913,7 +913,17 @@ def apply_fbank(m_mag, v_bins_warp, nbands, win_func=np.hanning):
         m_fbank[v_cntrs_ext[nxb-1]:(v_cntrs_ext[nxb-1]+winlen),nxb-1] = v_win
 
     # Apply filterbank:
-    m_mag_mel = np.dot(m_mag, m_fbank)
+    if mode=='average':
+        m_mag_mel = np.dot(m_mag, m_fbank)
+    elif mode=='maxabs':
+        m_mag_mel = np.zeros((nfrms, nbands))
+        for nxf in xrange(nfrms):
+            v_mag = m_mag[nxf,:]
+            m_filtered = v_mag[:,None] * m_fbank
+            v_nx_max   = np.argmax(np.abs(m_filtered), axis=0)
+            m_mag_mel[nxf,:]  = v_mag[v_nx_max]
+
+            #for nxb in xrange():
 
     #---------------------------------------------------------
     ''' # OLD simple average filter bank.
@@ -976,7 +986,7 @@ def sp_mel_unwarp_fbank(m_mag_mel, nbins, alpha=0.77):
     return m_mag
 
 
-def unwarp_from_fbank(m_mag_mel, v_bins_warp):
+def unwarp_from_fbank(m_mag_mel, v_bins_warp, interp_kind='quadratic'):
     '''
     n_bins: number of frequency bins (i.e., Hz).
     v_bins_warp: Mapping from input bins to output (monotonically crescent from 0 to any positive number).
@@ -991,14 +1001,14 @@ def unwarp_from_fbank(m_mag_mel, v_bins_warp):
     v_cntrs_mel = np.linspace(0, maxval, n_melbands)
 
     # To linear frequency:
-    f_interp  = interpolate.interp1d(v_bins_warp, np.arange(n_bins), kind='quadratic')
+    f_interp  = interpolate.interp1d(v_bins_warp, np.arange(n_bins), kind=interp_kind)
     v_cntrs   = lu.round_to_int(f_interp(v_cntrs_mel))
 
     # Process per frame:
     v_bins = np.arange(n_bins)
     m_mag = np.zeros((nfrms, n_bins))
     for nxf in xrange(nfrms):
-        f_interp = interpolate.interp1d(v_cntrs, m_mag_mel[nxf,:], kind='quadratic')
+        f_interp = interpolate.interp1d(v_cntrs, m_mag_mel[nxf,:], kind=interp_kind)
         #f_interp = interpolate.interp1d(v_cntrs, m_mag_mel[nxf,:], kind='linear')
         m_mag[nxf,:] = f_interp(v_bins)
 
