@@ -74,7 +74,7 @@ if __name__ == '__main__':
 
 
         print("Saving wav file..............................................")
-        wav_file_syn = out_dir + '/' + lu.get_filename(wav_file_orig) + '_copy_syn_low_dim_ph_comp_45_han_voi_slinear_voi_win_anti_ring_no_hpf.wav'
+        wav_file_syn = out_dir + '/' + lu.get_filename(wav_file_orig) + '_copy_syn_low_dim_ph_comp_45_han_voi_slinear_win_anti_ring_no_hpf.wav'
 
     else:
         print("Analysing.....................................................")

@@ -976,7 +976,7 @@ def synthesis_from_compressed_type1_with_phase_comp(m_mag_mel_log, m_real_mel, m
     m_syn_frms  = np.fft.fftshift(m_syn_frms, axes=1)
 
     # Debug:
-    m_syn_frms[~v_voi,:] = 0.0
+    #m_syn_frms[~v_voi,:] = 0.0
     #m_syn_frms[71,:] = 0.0
     #m_syn_frms[72,:] = 0.0
     #m_syn_frms[73,:] = 0.0
@@ -1009,7 +1009,7 @@ def synthesis_from_compressed_type1_with_phase_comp(m_mag_mel_log, m_real_mel, m
     v_syn_sig = ola(m_syn_frms, v_pm, win_func=None)
 
     # HPF - Output:============================================================
-    '''
+    #'''
     fc    = 60
     order = 4
     fc_norm   = fc / (fs / 2.0)
@@ -1172,7 +1172,7 @@ def synthesis_from_compressed_type1(m_mag_mel_log, m_real_mel, m_imag_mel, v_lf0
     m_syn_frms  = np.fft.fftshift(m_syn_frms, axes=1)
 
     # Debug:
-    m_syn_frms[~v_voi,:] = 0.0
+    #m_syn_frms[~v_voi,:] = 0.0
 
     v_syn_sig   = ola(m_syn_frms, v_pm, win_func=None)
 
