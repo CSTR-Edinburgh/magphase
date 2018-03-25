@@ -1009,14 +1009,28 @@ def synthesis_from_compressed_type1_with_phase_comp(m_mag_mel_log, m_real_mel, m
     v_syn_sig = ola(m_syn_frms, v_pm, win_func=None)
 
     # HPF - Output:============================================================
-    #'''
+    # NOTE: The HPF unbalance the polarity of the signal, because it removed DC!
+    '''
     fc    = 60
     order = 4
     fc_norm   = fc / (fs / 2.0)
     bc, ac    = signal.ellip(order,0.5 , 80, fc_norm, btype='highpass')
     v_syn_sig = signal.lfilter(bc, ac, v_syn_sig)
     #'''
+
+    # Butterworth:
+    order = 4
+    fc = 40 # in Hz
+    fc_norm = fc /(fs/2.0)
+    v_b, v_a = signal.butter(order, fc_norm, btype='highpass')
+    v_syn_sig = signal.lfilter(v_b, v_a, v_syn_sig)
+
+    if False:
+        fvtool(v_b, v_a, fs=48000)
+
     return v_syn_sig
+
+
 
 #==============================================================================
 def synthesis_from_compressed_type1(m_mag_mel_log, m_real_mel, m_imag_mel, v_lf0, fs, fft_len=None,
