@@ -885,6 +885,20 @@ def build_mel_curve(alpha, nbins, amp=np.pi):
 
     return v_bins_warp
 
+'''
+def build_fbank(nbins, nbands):
+    m_fbank = np.zeros((nbins, nbands))
+    v_cntrs_ext = np.r_[v_cntrs[0], v_cntrs, v_cntrs[-1]]
+    v_winlen = np.zeros(nbands)
+    for nxb in xrange(1, nbands+1):
+        winlen_l = v_cntrs_ext[nxb]   - v_cntrs_ext[nxb-1]
+        winlen_r = v_cntrs_ext[nxb+1] - v_cntrs_ext[nxb]
+        v_win    = gen_non_symmetric_win(winlen_l, winlen_r, win_func=win_func, b_norm=True)
+        winlen   = v_win.size
+        v_winlen[nxb-1] = winlen
+        m_fbank[v_cntrs_ext[nxb-1]:(v_cntrs_ext[nxb-1]+winlen),nxb-1] = v_win
+'''
+
 def apply_fbank(m_mag, v_bins_warp, nbands, win_func=np.hanning, mode='average'):
     '''
     Applies an average filter bank.
@@ -905,12 +919,15 @@ def apply_fbank(m_mag, v_bins_warp, nbands, win_func=np.hanning, mode='average')
     # Build filter bank:
     m_fbank = np.zeros((nbins, nbands))
     v_cntrs_ext = np.r_[v_cntrs[0], v_cntrs, v_cntrs[-1]]
+    v_winlen = np.zeros(nbands)
     for nxb in xrange(1, nbands+1):
         winlen_l = v_cntrs_ext[nxb]   - v_cntrs_ext[nxb-1]
         winlen_r = v_cntrs_ext[nxb+1] - v_cntrs_ext[nxb]
         v_win    = gen_non_symmetric_win(winlen_l, winlen_r, win_func=win_func, b_norm=True)
         winlen   = v_win.size
+        v_winlen[nxb-1] = winlen
         m_fbank[v_cntrs_ext[nxb-1]:(v_cntrs_ext[nxb-1]+winlen),nxb-1] = v_win
+
 
     # Apply filterbank:
     if mode=='average':
@@ -943,15 +960,59 @@ def apply_fbank(m_mag, v_bins_warp, nbands, win_func=np.hanning, mode='average')
     '''
 
 
-    return m_mag_mel
+    return m_mag_mel, v_winlen
 
 def sp_mel_warp_fbank(m_mag, n_melbands, alpha=0.77):
 
     nfrms, nbins = m_mag.shape
     v_bins_warp  = build_mel_curve(alpha, nbins)
-    m_mag_mel    = np.exp(apply_fbank(log(m_mag), v_bins_warp, n_melbands))
+    m_mag_mel = np.exp(apply_fbank(log(m_mag), v_bins_warp, n_melbands)[0])
 
     return m_mag_mel
+
+def sp_mel_warp_fbank_2d(m_mag, n_melbands, alpha=0.77):
+    '''
+    It didn't work as expected.
+    '''
+
+    nfrms, nbins  = m_mag.shape
+    v_bins_warp   = build_mel_curve(alpha, nbins)
+    m_mag_mel_log, v_winlen = apply_fbank(log(m_mag), v_bins_warp, n_melbands)
+
+    # Fixing boundaries in window lengths:
+    #v_winlen[0] = v_winlen[1]
+    #v_winlen[-1] = v_winlen[-2]
+
+
+    #max_span = 5
+    #v_td_span = (v_winlen - v_winlen[0])
+    #v_td_span = (max_span - 1.0) * v_td_span / v_td_span[-1] + 1
+
+    '''
+    v_winlen_norm = v_winlen / nbins
+    td_factor = 20
+    v_td_span = td_factor * v_winlen_norm
+    v_td_span = 2 * np.ceil(v_td_span / 2.0) - 1 # Ensuring odd numbers.
+    v_td_span = np.maximum(v_td_span, 1.0)
+    v_td_span = v_td_span.astype(int)
+    '''
+    max_span = 5
+    v_td_span = 1 + build_mel_curve(-0.3, n_melbands, amp=(max_span - 1.0))
+    v_td_span = (2 * np.ceil(v_td_span / 2.0) - 1).astype(int) # Ensuring odd numbers.
+
+
+    m_mag_mel_log_2d = np.zeros(m_mag_mel_log.shape)
+    for nxb in xrange(v_td_span.size):
+        m_mag_mel_log_2d[:,nxb] = smooth_by_conv(m_mag_mel_log[:,nxb], v_win=np.hanning(v_td_span[nxb] + 2))
+
+
+    if False:
+        plm(m_mag_mel_log[:,:])
+        plm(m_mag_mel_log_2d[:,:])
+
+        pl(v_td_span)
+
+    return np.exp(m_mag_mel_log_2d)
 
 def sp_mel_unwarp_fbank(m_mag_mel, nbins, alpha=0.77):
 
@@ -963,7 +1024,7 @@ def sp_mel_unwarp_fbank(m_mag_mel, nbins, alpha=0.77):
     #v_bins_warp = np.arctan(  (1-alpha**2) * np.sin(v_bins) / ((1+alpha**2)*np.cos(v_bins) - 2*alpha) )
     #v_bins_warp[v_bins_warp < 0] += np.pi
     v_bins_warp = build_mel_curve(alpha, nbins, amp=np.pi)
-    m_mag = unwarp_from_fbank(m_mag_mel, nbins, v_bins_warp)
+    m_mag = unwarp_from_fbank(m_mag_mel, v_bins_warp)
 
     '''
     # Bands gen:
@@ -1015,7 +1076,7 @@ def unwarp_from_fbank(m_mag_mel, v_bins_warp, interp_kind='quadratic'):
     return m_mag
 
 #-------------------------------------------------------------------------------------------------------
-# 1-D Smoothing by convolution: (from ScyPy Cookbook - not checked yet!)-----------------------------
+# 2-D Smoothing by convolution: (from ScyPy Cookbook - not checked yet!)-----------------------------
 def smooth_by_conv(m_data, v_win=np.hanning(11)):
     '''
     Smooths along m_data columns. If m_data is 1d, it smooths along the other dimension.

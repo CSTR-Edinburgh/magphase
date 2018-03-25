@@ -2400,7 +2400,11 @@ def format_for_modelling_phase_comp(m_mag, m_real, m_imag, v_f0, fs, nbins_mel=6
 
     # Mag to Log-Mag-Mel (compression):
     if b_mag_fbank_mel:
-        m_mag_mel = la.sp_mel_warp_fbank(m_mag, nbins_mel, alpha=alpha)
+
+        # Debug:
+        #m_mag_mel = la.sp_mel_warp_fbank(m_mag, nbins_mel, alpha=alpha)
+        m_mag_mel = la.sp_mel_warp_fbank_2d(m_mag, nbins_mel, alpha=alpha)
+
     else:
         m_mag_mel = la.sp_mel_warp(m_mag, nbins_mel, alpha=alpha, in_type=3)
 
@@ -2415,8 +2419,8 @@ def format_for_modelling_phase_comp(m_mag, m_real, m_imag, v_f0, fs, nbins_mel=6
     m_imag_shrt = m_imag[:,:bin_r]
 
     v_bins_mel = la.build_mel_curve(alpha, fft_len_half)[:bin_r]
-    m_real_mel = la.apply_fbank(m_real_shrt, v_bins_mel, nbins_phase)
-    m_imag_mel = la.apply_fbank(m_imag_shrt, v_bins_mel, nbins_phase)
+    m_real_mel = la.apply_fbank(m_real_shrt, v_bins_mel, nbins_phase)[0]
+    m_imag_mel = la.apply_fbank(m_imag_shrt, v_bins_mel, nbins_phase)[0]
 
     # Debug (reconstruction):
     # magnitude:
@@ -2454,23 +2458,21 @@ def format_for_modelling_phase_comp(m_mag, m_real, m_imag, v_f0, fs, nbins_mel=6
 
         # Oposite order of opearions:
         m_ph = np.angle(m_real + m_imag * 1j)
-        m_ph_mel = la.apply_fbank(m_ph[:,:bin_r], v_bins_mel, nbins_phase)
+        m_ph_mel = la.apply_fbank(m_ph[:,:bin_r], v_bins_mel, nbins_phase)[0]
         m_ph_shrt = la.unwarp_from_fbank(m_ph_mel, v_bins_mel)
         m_ph_rec  = np.hstack((m_ph_shrt, m_ph_shrt[:,-1][:,None] + np.zeros((nfrms, fft_len_half-bin_r))))
 
 
         # Compress by maxabs:
-        m_real_mel_max = la.apply_fbank(m_real_shrt, v_bins_mel, nbins_phase, win_func=win_squared, mode='maxabs')
-        m_imag_mel_max = la.apply_fbank(m_imag_shrt, v_bins_mel, nbins_phase, win_func=win_squared, mode='maxabs')
+        m_real_mel_max = la.apply_fbank(m_real_shrt, v_bins_mel, nbins_phase, win_func=win_squared, mode='maxabs')[0]
+        m_imag_mel_max = la.apply_fbank(m_imag_shrt, v_bins_mel, nbins_phase, win_func=win_squared, mode='maxabs')[0]
 
         m_real_shrt_max = la.unwarp_from_fbank(m_real_mel_max, v_bins_mel)
         m_imag_shrt_max = la.unwarp_from_fbank(m_imag_mel_max, v_bins_mel)
         m_real_rec_max  = np.hstack((m_real_shrt_max, m_real_shrt_max[:,-1][:,None] + np.zeros((nfrms, fft_len_half-bin_r))))
         m_imag_rec_max  = np.hstack((m_imag_shrt_max, m_imag_shrt_max[:,-1][:,None] + np.zeros((nfrms, fft_len_half-bin_r))))
+
         # Plots:
-
-        if True: import ipdb; ipdb.set_trace(context=8)  # breakpoint aa783b2a //
-
         nx=73; figure(); plot(m_real[nx,:]); plot(m_real_rec[nx,:]); grid()
 
         nx=73; figure(); plot(m_real[nx,:]); plot(m_real_rec[nx,:]); plot(m_real_rec_max[nx,:]); grid()
@@ -2730,7 +2732,7 @@ def analysis_compressed_type1(wav_file, fft_len=None, out_dir=None, nbins_mel=60
 
 
 def analysis_compressed_type1_with_phase_comp(wav_file, fft_len=None, out_dir=None,
-                                                    nbins_mel=60, nbins_phase=10, const_rate_ms=-1.0):
+                                                    nbins_mel=60, nbins_phase=10, const_rate_ms=-1.0, b_mag_fbank_mel=False):
 
     '''
 
@@ -2758,8 +2760,8 @@ def analysis_compressed_type1_with_phase_comp(wav_file, fft_len=None, out_dir=No
         v_f0  *= v_voi # Double check this. At the beginning of voiced segments.
 
     # Formatting for Acoustic Modelling:
-    #m_mag_mel_log, m_real_mel, m_imag_mel, v_lf0_smth = format_for_modelling(m_mag, m_real, m_imag, v_f0, fs, nbins_mel=nbins_mel, nbins_phase=nbins_phase)
-    m_mag_mel_log, m_real_mel, m_imag_mel, v_lf0_smth = format_for_modelling_phase_comp(m_mag, m_real, m_imag, v_f0, fs, nbins_mel=nbins_mel, nbins_phase=nbins_phase)
+    m_mag_mel_log, m_real_mel, m_imag_mel, v_lf0_smth = format_for_modelling_phase_comp(m_mag, m_real, m_imag, v_f0, fs,
+                                                            nbins_mel=nbins_mel, nbins_phase=nbins_phase, b_mag_fbank_mel=b_mag_fbank_mel)
     fft_len = 2*(np.size(m_mag,1) - 1)
 
     # Save features:
