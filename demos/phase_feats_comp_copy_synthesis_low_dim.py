@@ -56,7 +56,7 @@ if __name__ == '__main__':
 
     # INPUT:==============================================================================
     wav_file_orig = 'data_48k/wavs_nat/hvd_595.wav' # Original natural wave file. You can choose anyone provided in the /wavs_nat directory.
-    out_dir       = 'data_48k/wavs_syn_ph_comp_dev' # Where the synthesised waveform will be stored.
+    out_dir       = 'data_48k/wavs_syn_ph_comp_dev_2' # Where the synthesised waveform will be stored.
     nbins_phase   = 45
     b_new_phase_comp = True
 
@@ -74,7 +74,7 @@ if __name__ == '__main__':
 
 
         print("Saving wav file..............................................")
-        wav_file_syn = out_dir + '/' + lu.get_filename(wav_file_orig) + '_copy_syn_low_dim_ph_comp_45_han_voi_slinear_win_anti_ring_butter.wav'
+        wav_file_syn = out_dir + '/' + lu.get_filename(wav_file_orig) + '_copy_syn_low_dim_ph_comp_45_bin_r.wav'
 
     else:
         print("Analysing.....................................................")

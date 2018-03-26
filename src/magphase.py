@@ -2402,8 +2402,8 @@ def format_for_modelling_phase_comp(m_mag, m_real, m_imag, v_f0, fs, nbins_mel=6
     if b_mag_fbank_mel:
 
         # Debug:
-        #m_mag_mel = la.sp_mel_warp_fbank(m_mag, nbins_mel, alpha=alpha)
-        m_mag_mel = la.sp_mel_warp_fbank_2d(m_mag, nbins_mel, alpha=alpha)
+        m_mag_mel = la.sp_mel_warp_fbank(m_mag, nbins_mel, alpha=alpha)
+        #m_mag_mel = la.sp_mel_warp_fbank_2d(m_mag, nbins_mel, alpha=alpha)
 
     else:
         m_mag_mel = la.sp_mel_warp(m_mag, nbins_mel, alpha=alpha, in_type=3)
