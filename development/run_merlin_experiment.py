@@ -12,7 +12,7 @@ curr_dir = os.getcwd()
 sys.path.append(os.path.realpath(curr_dir + '/../src'))
 import libutils as lu
 import magphase as mp
-import SafeConfigParser
+import configparser # Install it with pip (it's not the same as 'ConfigParser' (old version))
 import subprocess
 
 
@@ -62,13 +62,14 @@ if __name__ == '__main__':
 
     # INPUT:================================================================================#
     # Setup:
-    b_setup      = True
-    b_feat_extr  = False
-    b_run_merlin = False
-    b_wavgen     = False
+    b_setup_files   = True
+    b_feat_extr     = False
+    b_config_merlin = False
+    b_run_merlin    = False
+    b_wavgen        = False
 
     # General:
-    exper_path = '/afs/inf.ed.ac.uk/group/cstr/projects/Felipe_Espic/Projects/DirectFFTWaveModelling/magphase_proj/merlin/egs/nick/1_nick_magphase_type1_var_rate_new_ph_45'
+    exper_path = '/afs/inf.ed.ac.uk/group/cstr/projects/Felipe_Espic/Projects/DirectFFTWaveModelling/magphase_proj/merlin/egs/nick/01_nick_magphase_type1_var_rate_new_ph_45'
 
     b_feat_ext_multiproc = False
     nbins_phase          = 20
@@ -79,36 +80,17 @@ if __name__ == '__main__':
     NORMCMP  = True
     TRAINDNN = True
     DNNGEN   = True
-    GENWAV   = True
+    GENWAV   = False
     CALMCD   = True
 
     # PROCESS:================================================================================
-    if b_setup:
+    if b_setup_files:
         # Copy files and directories from base to current experiment:
         copytree(base_exper_path, l_files_and_dirs_to_copy, exper_path)
 
-        # Edit Merlin's config file:
-        parser = SafeConfigParser.SafeConfigParser(os.path.join(base_exper_path, 'conf/config.conf'))
-        parser.set('Labels', 'question_file_name', os.path.join(exper_path,question_file_name))
-
-        parser.set('Outputs', 'real' , '%d' % nbins_phase)
-        parser.set('Outputs', 'imag' , '%d' % nbins_phase)
-        parser.set('Outputs', 'dreal', '%d' % (nbins_phase*3))
-        parser.set('Outputs', 'dimag', '%d' % (nbins_phase*3))
-
-        parser.set('Processes', 'NORMLAB' , NORMLAB)
-        parser.set('Processes', 'MAKECMP' , MAKECMP)
-        parser.set('Processes', 'NORMCMP' , NORMCMP)
-        parser.set('Processes', 'TRAINDNN', TRAINDNN)
-        parser.set('Processes', 'DNNGEN'  , DNNGEN )
-        parser.set('Processes', 'GENWAV'  , GENWAV)
-        parser.set('Processes', 'CALMCD'  , CALMCD)
-
-        with open(config_file, 'wb') as file:
-            parser.write(file)
-
-        # Save backup of this file and used magphase:
-        shutil.copytree(os.path.dirname(mp.__filename__), os.path.join(exper_path, 'backup_magphase_code'))
+        # Save backup of this file and used magphase code:
+        shutil.copytree(os.path.dirname(mp.__file__), os.path.join(exper_path, 'backup_magphase_code'))
+        shutil.copy2(__file__, os.path.join(exper_path, 'conf'))
 
     if b_feat_extr:
         # Extract features:
@@ -120,6 +102,31 @@ if __name__ == '__main__':
         else:
             for file_name_token in l_file_tokns:
                 feat_extraction(in_wav_dir, file_name_token, acoustic_feats_dir)
+
+    if b_config_merlin:
+        # Edit Merlin's config file:
+        parser = configparser.ConfigParser()
+        parser.optionxform = str
+        parser.read([os.path.join(exper_path, 'conf/config.conf')])
+
+        parser['DEFAULT']['TOPLEVEL'] = exper_path
+        parser['Labels']['question_file_name'] = os.path.join(exper_path , question_file_name)
+
+        parser['Outputs']['real' ] = '%d' % nbins_phase
+        parser['Outputs']['imag' ] = '%d' % nbins_phase
+        parser['Outputs']['dreal'] = '%d' % (nbins_phase*3)
+        parser['Outputs']['dimag'] = '%d' % (nbins_phase*3)
+
+        parser['Processes']['NORMLAB' ] = '%s' % NORMLAB
+        parser['Processes']['MAKECMP' ] = '%s' % MAKECMP
+        parser['Processes']['NORMCMP' ] = '%s' % NORMCMP
+        parser['Processes']['TRAINDNN'] = '%s' % TRAINDNN
+        parser['Processes']['DNNGEN'  ] = '%s' % DNNGEN
+        parser['Processes']['GENWAV'  ] = '%s' % GENWAV
+        parser['Processes']['CALMCD'  ] = '%s' % CALMCD
+
+        with open(os.path.join(exper_path ,config_file), 'wb') as file:
+            parser.write(file)
 
 
     # Run Merlin:
