@@ -50,7 +50,7 @@ if __name__ == '__main__':
                                 'scripts',
                                 'data/label_state_align_from_var_rate']
 
-    config_file     = 'conf/config_exper.conf'
+    #config_file     = 'conf/config_exper.conf'
 
     # Feature Extraction:
     in_wav_dir         = '/afs/inf.ed.ac.uk/group/cstr/projects/Felipe_Espic/Databases/Nick-Zhizheng_dnn_baseline_practice/data/wav'
@@ -87,6 +87,7 @@ if __name__ == '__main__':
     if b_setup_files:
         # Copy files and directories from base to current experiment:
         copytree(base_exper_path, l_files_and_dirs_to_copy, exper_path)
+        os.rename(os.path.join(exper_path, 'conf/config.conf'), os.path.join(exper_path, 'conf/config_base.conf'))
 
         # Save backup of this file and used magphase code:
         shutil.copytree(os.path.dirname(mp.__file__), os.path.join(exper_path, 'backup_magphase_code'))
@@ -107,7 +108,7 @@ if __name__ == '__main__':
         # Edit Merlin's config file:
         parser = configparser.ConfigParser()
         parser.optionxform = str
-        parser.read([os.path.join(exper_path, 'conf/config.conf')])
+        parser.read([os.path.join(exper_path, 'conf/config_base.conf')])
 
         parser['DEFAULT']['TOPLEVEL'] = exper_path
         parser['Labels']['question_file_name'] = os.path.join(exper_path , question_file_name)
@@ -125,7 +126,7 @@ if __name__ == '__main__':
         parser['Processes']['GENWAV'  ] = '%s' % GENWAV
         parser['Processes']['CALMCD'  ] = '%s' % CALMCD
 
-        with open(os.path.join(exper_path ,config_file), 'wb') as file:
+        with open(os.path.join(exper_path ,'conf/config.conf'), 'wb') as file:
             parser.write(file)
 
 
@@ -133,7 +134,7 @@ if __name__ == '__main__':
     if b_run_merlin:
         subprocess.call([ os.path.join(exper_path , 'scripts/submit.sh'),
                           os.path.join(merlin_path, 'src/run_merlin.py'),
-                          os.path.join(exper_path , config_file)])
+                          os.path.join(exper_path , 'conf/config.conf')])
 
 
     # Waveform generation:
