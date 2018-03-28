@@ -2949,7 +2949,6 @@ def synthesis_from_acoustic_modelling(in_feats_dir, filename_token, out_syn_dir,
     m_imag_mel    = lu.read_binfile(in_feats_dir + '/' + filename_token + '.imag', dim=nbins_phase)
     v_lf0         = lu.read_binfile(in_feats_dir + '/' + filename_token + '.lf0' , dim=1)
 
-    print('DEBUG: Activated!!')
     if b_postfilter:
         print('DEBUG: Using MagPhase postfilter!!')
         m_mag_mel_log = post_filter(m_mag_mel_log, fs)
