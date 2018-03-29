@@ -1045,7 +1045,7 @@ def synthesis_from_compressed_type1_with_phase_comp(m_mag_mel_log, m_real_mel, m
 
 #==============================================================================
 def synthesis_from_compressed_type1(m_mag_mel_log, m_real_mel, m_imag_mel, v_lf0, fs, fft_len=None,
-                                    b_voi_ap_win=True, b_fbank_mel=False, const_rate_ms=-1.0, per_phase_type='magphase'):
+                                    b_voi_ap_win=True, b_fbank_mel=False, b_const_rate=False, per_phase_type='magphase'):
 
     '''
     b_fbank_mel: If True, Mel compression done by the filter bank approach. Otherwise, it uses sptk mcep related funcs.
@@ -1088,13 +1088,14 @@ def synthesis_from_compressed_type1(m_mag_mel_log, m_real_mel, m_imag_mel, v_lf0
     m_imag = la.sp_mel_unwarp(m_imag_mel, fft_len_half, alpha=alpha, in_type='log')
 
     # Constant to variable frame rate:============================================
-    if const_rate_ms>0.0:
+    if b_const_rate:
+        const_rate_ms = 5.0
         interp_type = 'linear' #'quadratic' , 'cubic'
         v_shift, v_frm_locs_smpls = get_shifts_and_frm_locs_from_const_shifts(v_shift, const_rate_ms, fs, interp_type=interp_type)
-        m_mag  = interp_from_const_to_variable_rate(m_mag,    v_frm_locs_smpls, const_rate_ms, fs, interp_type=interp_type)
-        m_real = interp_from_const_to_variable_rate(m_real,   v_frm_locs_smpls, const_rate_ms, fs, interp_type=interp_type)
-        m_imag = interp_from_const_to_variable_rate(m_imag,   v_frm_locs_smpls, const_rate_ms, fs, interp_type=interp_type)
-        v_voi  = interp_from_const_to_variable_rate(v_voi, v_frm_locs_smpls, const_rate_ms, fs, interp_type=interp_type) > 0.5
+        m_mag  = interp_from_const_to_variable_rate(m_mag,  v_frm_locs_smpls, const_rate_ms, fs, interp_type=interp_type)
+        m_real = interp_from_const_to_variable_rate(m_real, v_frm_locs_smpls, const_rate_ms, fs, interp_type=interp_type)
+        m_imag = interp_from_const_to_variable_rate(m_imag, v_frm_locs_smpls, const_rate_ms, fs, interp_type=interp_type)
+        v_voi  = interp_from_const_to_variable_rate(v_voi,  v_frm_locs_smpls, const_rate_ms, fs, interp_type=interp_type) > 0.5
         v_f0   = shift_to_f0(v_shift, v_voi, fs, out='f0', b_smooth=False)
         nfrms  = v_shift.size
 
@@ -2938,13 +2939,15 @@ def analysis_compressed_type2(wav_file, fft_len=None, out_dir=None, nbins_mel=60
     return m_mag_mel_log, m_real_mel, m_imag_mel, v_lf0_smth, v_shift, fs, fft_len, v_lgain
 
 
-def synthesis_from_acoustic_modelling(in_feats_dir, filename_token, out_syn_dir, nbins_mel, nbins_phase, fs, fft_len=None, pf_type='no', magphase_type='type2'):
+def synthesis_from_acoustic_modelling(in_feats_dir, filename_token, out_syn_dir, nbins_mel, nbins_phase, fs, fft_len=None, pf_type='no', magphase_type='type1', b_const_rate=False):
     '''
     pf_type: Postfilter type: 'merlin' (Merlin's style), 'magphase' (MagPhase's own postfilter (in development)), or 'no'.
     '''
 
     #if pf_type=='merlin':
     #    post_filter_merlin()
+    # Display:
+    print("\nSynthesising file: " + filename_token + '.wav............................')
 
     # Reading parameter files:
     m_mag_mel_log = lu.read_binfile(in_feats_dir + '/' + filename_token + '.mag' , dim=nbins_mel)
@@ -2953,13 +2956,13 @@ def synthesis_from_acoustic_modelling(in_feats_dir, filename_token, out_syn_dir,
     v_lf0         = lu.read_binfile(in_feats_dir + '/' + filename_token + '.lf0' , dim=1)
 
     if pf_type=='magphase':
-        print('DEBUG: Using MagPhase postfilter!!')
+        print('Using MagPhase postfilter!')
         m_mag_mel_log = post_filter(m_mag_mel_log, fs)
 
 
     # Waveform generation:
     if magphase_type=='type1':
-        v_syn_sig = synthesis_from_compressed_type1(m_mag_mel_log, m_real_mel, m_imag_mel, v_lf0, fs, fft_len=fft_len)
+        v_syn_sig = synthesis_from_compressed_type1(m_mag_mel_log, m_real_mel, m_imag_mel, v_lf0, fs, fft_len=fft_len, b_const_rate=b_const_rate)
     elif magphase_type=='type2':
         v_syn_sig = synthesis_from_compressed_type2(m_mag_mel_log, m_real_mel, m_imag_mel, v_lf0, fs, fft_len=fft_len, const_rate_ms=5)
 
@@ -3103,11 +3106,10 @@ def griffin_lim(S, fs, fft_len, niters=100):
     return y
 '''
 
-    '''
+'''
 def post_filter_merlin(mgc_file_in, mgc_file_out, mgc_dim, pf_coef, fw_coef, co_coef, fl_coef, gen_dir, cfg):
-    '''
+
     #TODO: Add note about Merlin copyright
-    '''
 
     SPTK = cfg.SPTK
 
@@ -3154,4 +3156,4 @@ def post_filter_merlin(mgc_file_in, mgc_file_out, mgc_dim, pf_coef, fw_coef, co_
     SOPR
     MERGE
     B2MC
-    '''
+'''
