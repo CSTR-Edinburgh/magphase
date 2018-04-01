@@ -902,7 +902,12 @@ def synthesis_with_del_comp_and_ph_encoding3(m_spmgc, m_phs_mgc, m_phc_mgc, v_sh
 def synthesis_from_lossless(m_mag, m_real, m_imag, v_f0, fs):
 
     m_ph_cmpx = m_real + m_imag * 1j
-    m_fft     = m_mag * m_ph_cmpx / np.absolute(m_ph_cmpx)
+    
+    ### with protection against divide-by-zero:
+    m_ph_cmpx_mag = np.absolute(m_ph_cmpx)
+    m_ph_cmpx_mag[m_ph_cmpx_mag==0.0] = 1.0
+    m_fft     = m_mag * m_ph_cmpx / m_ph_cmpx_mag
+    
     m_fft     = la.add_hermitian_half(m_fft, data_type='complex')
     m_frm     = np.fft.ifft(m_fft).real
     m_frm     = np.fft.fftshift(m_frm,  axes=1)
