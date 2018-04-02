@@ -1590,13 +1590,17 @@ def analysis_lossless(wav_file, fft_len=None, out_dir=None):
     os.remove(est_file)
     v_pm_smpls = v_pm_sec * fs
 
-    # Spectral analysis:
-    m_fft, v_shift = analysis_with_del_comp_from_pm(v_sig, fs, v_pm_smpls, fft_len=fft_len)
-
     # Debug:
     if False:
         from libplot import lp
-        lp.plotm(np.absolute(m_fft))
+        #v_pm_one_zero = lu.indexes_to_one_zero_vector(v_pm_smpls, v_sig.size)
+        #lp.figure(); lp.plot(v_sig); lp.stem(v_pm_one_zero); lp.grid(); lp.show()
+        #lp.figure(); lp.plot(v_sig[:100]); lp.grid()
+        #lp.figure(); lp.plot(v_sig); lp.vlines(v_pm_smpls, np.min(v_sig), np.max(v_sig), colors='r'); lp.grid()
+        lp.plot_pitch_marks(v_sig, v_pm_smpls)
+
+    # Spectral analysis:
+    m_fft, v_shift = analysis_with_del_comp_from_pm(v_sig, fs, v_pm_smpls, fft_len=fft_len)
 
     # Getting high-ress magphase feats:
     m_mag, m_real, m_imag, v_f0 = compute_lossless_feats(m_fft, v_shift, v_voi, fs)
