@@ -54,11 +54,15 @@ def plots(m_mag_mel_log, m_real_mel, m_imag_mel, v_lf0):
 
 if __name__ == '__main__':  
 
-    # INPUT:==============================================================================
-    wav_file_orig = 'data_48k/wavs_nat/hvd_595.wav' # Original natural wave file. You can choose anyone provided in the /wavs_nat directory.
-    out_dir       = 'data_48k/wavs_syn_ph_comp_dev_2' # Where the synthesised waveform will be stored.
-    nbins_phase   = 20
+    # CONSTANTS:==========================================================================
+    out_dir = 'data_48k/wavs_syn_mel_comp_2d_dev' # Where the synthesised waveform will be stored.
     b_new_phase_comp = True
+    const_rate_ms = -1 # 5 # -1
+
+    # INPUT:==============================================================================
+    wav_file_orig = 'data_48k/wavs_nat/hvd_593.wav' # Original natural wave file. You can choose anyone provided in the /wavs_nat directory.
+    nbins_phase   = 15
+    b_mag_fbank_mel = False
 
     # PROCESS:============================================================================
     lu.mkdir(out_dir)
@@ -66,15 +70,17 @@ if __name__ == '__main__':
     if b_new_phase_comp:
         print("Analysing.....................................................")
         m_mag_mel_log, m_real_mel, m_imag_mel, v_lf0, v_shift, fs, fft_len = mp.analysis_compressed_type1_with_phase_comp(wav_file_orig,
-                                                                                                            nbins_mel=60, nbins_phase=nbins_phase)
+                                                                nbins_phase=nbins_phase, const_rate_ms=const_rate_ms, b_mag_fbank_mel=b_mag_fbank_mel)
 
 
         print("Synthesising.................................................")
-        v_syn_sig = mp.synthesis_from_compressed_type1_with_phase_comp(m_mag_mel_log, m_real_mel, m_imag_mel, v_lf0, fs)
+        v_syn_sig = mp.synthesis_from_compressed_type1_with_phase_comp(m_mag_mel_log, m_real_mel, m_imag_mel, v_lf0, fs,
+                                                                        b_fbank_mel=b_mag_fbank_mel, const_rate_ms=const_rate_ms)
 
 
         print("Saving wav file..............................................")
-        wav_file_syn = out_dir + '/' + lu.get_filename(wav_file_orig) + '_copy_syn_low_dim_ph_comp_10_cf_quadratic.wav'
+        #wav_file_syn = out_dir + '/' + lu.get_filename(wav_file_orig) + '_copy_syn_low_dim_ph_15_mel_comp_sptk_normal.wav'
+        wav_file_syn = out_dir + '/' + lu.get_filename(wav_file_orig) + '_copy_syn_low_dim_ph_15_mel_comp_fbank_prue.wav'
 
     else:
         print("Analysing.....................................................")

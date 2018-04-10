@@ -126,7 +126,7 @@ def pm_to_shift(v_pm):
     return v_shift
 
 #------------------------------------------------------------------------------
-def gen_non_symmetric_win(left_len, right_len, win_func):
+def gen_non_symmetric_win(left_len, right_len, win_func, b_norm=False):
     # Left window:
     v_left_win = win_func(1+2*left_len)
     v_left_win = v_left_win[0:(left_len+1)]
@@ -136,7 +136,11 @@ def gen_non_symmetric_win(left_len, right_len, win_func):
     v_right_win = np.flipud(v_right_win[0:(right_len+1)])
     
     # Constructing window:
-    return np.hstack((v_left_win, v_right_win[1:]))    
+    v_win = np.hstack((v_left_win, v_right_win[1:]))
+    if b_norm:
+        v_win = v_win / np.sum(v_win)
+
+    return v_win
     
 #------------------------------------------------------------------------------
 # generated centered assymetric window:
@@ -881,45 +885,134 @@ def build_mel_curve(alpha, nbins, amp=np.pi):
 
     return v_bins_warp
 
-def apply_average_fbank(m_mag, v_bins_warp, n_bands):
+'''
+def build_fbank(nbins, nbands):
+    m_fbank = np.zeros((nbins, nbands))
+    v_cntrs_ext = np.r_[v_cntrs[0], v_cntrs, v_cntrs[-1]]
+    v_winlen = np.zeros(nbands)
+    for nxb in xrange(1, nbands+1):
+        winlen_l = v_cntrs_ext[nxb]   - v_cntrs_ext[nxb-1]
+        winlen_r = v_cntrs_ext[nxb+1] - v_cntrs_ext[nxb]
+        v_win    = gen_non_symmetric_win(winlen_l, winlen_r, win_func=win_func, b_norm=True)
+        winlen   = v_win.size
+        v_winlen[nxb-1] = winlen
+        m_fbank[v_cntrs_ext[nxb-1]:(v_cntrs_ext[nxb-1]+winlen),nxb-1] = v_win
+'''
+
+def apply_fbank(m_mag, v_bins_warp, nbands, win_func=np.hanning, mode='average'):
     '''
     Applies an average filter bank.
-    n_bands: number of output bands.
+    nbands: number of output bands.
     v_bins_warp: Mapping from input bins to output (monotonically crescent from 0 to any positive number).
                  Requirement: length = m_mag.shape[1]. If wanted, use build_mel_curve(...) to construct it.
     '''
-
     nfrms, nbins = m_mag.shape
 
     # Bands gen:
     maxval = v_bins_warp[-1]
-    v_cntrs_mel   = np.linspace(0, maxval, n_bands)
-    v_middles_mel = v_cntrs_mel + 0.5*(v_cntrs_mel[1] - v_cntrs_mel[0])
-    v_middles_mel = v_middles_mel[:-1]
+    v_cntrs_mel = np.linspace(0, maxval, nbands)
 
     # To linear frequency:
-    f_interp  = interpolate.interp1d(v_bins_warp, np.arange(nbins), kind='quadratic')
-    v_cntrs   = lu.round_to_int(f_interp(v_cntrs_mel))
-    v_middles = lu.round_to_int(f_interp(v_middles_mel))
+    f_interp = interpolate.interp1d(v_bins_warp, np.arange(nbins), kind='quadratic')
+    v_cntrs  = lu.round_to_int(f_interp(v_cntrs_mel))
 
+    # Build filter bank:
+    m_fbank = np.zeros((nbins, nbands))
+    v_cntrs_ext = np.r_[v_cntrs[0], v_cntrs, v_cntrs[-1]]
+    v_winlen = np.zeros(nbands)
+    for nxb in xrange(1, nbands+1):
+        winlen_l = v_cntrs_ext[nxb]   - v_cntrs_ext[nxb-1]
+        winlen_r = v_cntrs_ext[nxb+1] - v_cntrs_ext[nxb]
+        v_win    = gen_non_symmetric_win(winlen_l, winlen_r, win_func=win_func, b_norm=True)
+        winlen   = v_win.size
+        v_winlen[nxb-1] = winlen
+        m_fbank[v_cntrs_ext[nxb-1]:(v_cntrs_ext[nxb-1]+winlen),nxb-1] = v_win
+
+
+    # Apply filterbank:
+    if mode=='average':
+        m_mag_mel = np.dot(m_mag, m_fbank)
+    elif mode=='maxabs':
+        m_mag_mel = np.zeros((nfrms, nbands))
+        for nxf in xrange(nfrms):
+            v_mag = m_mag[nxf,:]
+            m_filtered = v_mag[:,None] * m_fbank
+            v_nx_max   = np.argmax(np.abs(m_filtered), axis=0)
+            m_mag_mel[nxf,:]  = v_mag[v_nx_max]
+
+            #for nxb in xrange():
+
+    #---------------------------------------------------------
+    ''' # OLD simple average filter bank.
     # Compress:
-    m_mag_mel = np.zeros((nfrms, n_bands))
+    m_mag_mel = np.zeros((nfrms, nbands))
+
+    v_middles_mel = v_cntrs_mel + 0.5*(v_cntrs_mel[1] - v_cntrs_mel[0])
+    v_middles_mel = v_middles_mel[:-1]
+    v_middles = lu.round_to_int(f_interp(v_middles_mel))
     v_middles_ext = np.r_[0, v_middles, v_cntrs[-1]]
+
 
     for nxf in xrange(nfrms):
         v_curr_mag = m_mag[nxf,:]
-        for nxb in xrange(n_bands):
+        for nxb in xrange(nbands):
             m_mag_mel[nxf,nxb] = np.mean(v_curr_mag[v_middles_ext[nxb]:v_middles_ext[nxb+1]])
+    '''
 
-    return m_mag_mel
+
+    return m_mag_mel, v_winlen
 
 def sp_mel_warp_fbank(m_mag, n_melbands, alpha=0.77):
 
     nfrms, nbins = m_mag.shape
     v_bins_warp  = build_mel_curve(alpha, nbins)
-    m_mag_mel    = np.exp(apply_average_fbank(log(m_mag), v_bins_warp, n_melbands))
+    m_mag_mel = np.exp(apply_fbank(log(m_mag), v_bins_warp, n_melbands)[0])
 
     return m_mag_mel
+
+def sp_mel_warp_fbank_2d(m_mag, n_melbands, alpha=0.77):
+    '''
+    It didn't work as expected.
+    '''
+
+    nfrms, nbins  = m_mag.shape
+    v_bins_warp   = build_mel_curve(alpha, nbins)
+    m_mag_mel_log, v_winlen = apply_fbank(log(m_mag), v_bins_warp, n_melbands)
+
+    # Fixing boundaries in window lengths:
+    #v_winlen[0] = v_winlen[1]
+    #v_winlen[-1] = v_winlen[-2]
+
+
+    #max_span = 5
+    #v_td_span = (v_winlen - v_winlen[0])
+    #v_td_span = (max_span - 1.0) * v_td_span / v_td_span[-1] + 1
+
+    '''
+    v_winlen_norm = v_winlen / nbins
+    td_factor = 20
+    v_td_span = td_factor * v_winlen_norm
+    v_td_span = 2 * np.ceil(v_td_span / 2.0) - 1 # Ensuring odd numbers.
+    v_td_span = np.maximum(v_td_span, 1.0)
+    v_td_span = v_td_span.astype(int)
+    '''
+    max_span = 5
+    v_td_span = 1 + build_mel_curve(-0.3, n_melbands, amp=(max_span - 1.0))
+    v_td_span = (2 * np.ceil(v_td_span / 2.0) - 1).astype(int) # Ensuring odd numbers.
+
+
+    m_mag_mel_log_2d = np.zeros(m_mag_mel_log.shape)
+    for nxb in xrange(v_td_span.size):
+        m_mag_mel_log_2d[:,nxb] = smooth_by_conv(m_mag_mel_log[:,nxb], v_win=np.hanning(v_td_span[nxb] + 2))
+
+
+    if False:
+        plm(m_mag_mel_log[:,:])
+        plm(m_mag_mel_log_2d[:,:])
+
+        pl(v_td_span)
+
+    return np.exp(m_mag_mel_log_2d)
 
 def sp_mel_unwarp_fbank(m_mag_mel, nbins, alpha=0.77):
 
@@ -954,7 +1047,7 @@ def sp_mel_unwarp_fbank(m_mag_mel, nbins, alpha=0.77):
     return m_mag
 
 
-def unwarp_from_fbank(m_mag_mel, v_bins_warp):
+def unwarp_from_fbank(m_mag_mel, v_bins_warp, interp_kind='quadratic'):
     '''
     n_bins: number of frequency bins (i.e., Hz).
     v_bins_warp: Mapping from input bins to output (monotonically crescent from 0 to any positive number).
@@ -969,21 +1062,21 @@ def unwarp_from_fbank(m_mag_mel, v_bins_warp):
     v_cntrs_mel = np.linspace(0, maxval, n_melbands)
 
     # To linear frequency:
-    f_interp  = interpolate.interp1d(v_bins_warp, np.arange(n_bins), kind='quadratic')
+    f_interp  = interpolate.interp1d(v_bins_warp, np.arange(n_bins), kind=interp_kind)
     v_cntrs   = lu.round_to_int(f_interp(v_cntrs_mel))
 
     # Process per frame:
     v_bins = np.arange(n_bins)
     m_mag = np.zeros((nfrms, n_bins))
     for nxf in xrange(nfrms):
-        f_interp = interpolate.interp1d(v_cntrs, m_mag_mel[nxf,:], kind='quadratic')
+        f_interp = interpolate.interp1d(v_cntrs, m_mag_mel[nxf,:], kind=interp_kind)
         #f_interp = interpolate.interp1d(v_cntrs, m_mag_mel[nxf,:], kind='linear')
         m_mag[nxf,:] = f_interp(v_bins)
 
     return m_mag
 
 #-------------------------------------------------------------------------------------------------------
-# 1-D Smoothing by convolution: (from ScyPy Cookbook - not checked yet!)-----------------------------
+# 2-D Smoothing by convolution: (from ScyPy Cookbook - not checked yet!)-----------------------------
 def smooth_by_conv(m_data, v_win=np.hanning(11)):
     '''
     Smooths along m_data columns. If m_data is 1d, it smooths along the other dimension.

@@ -829,13 +829,27 @@ def synthesis_from_compressed_type1_with_phase_comp(m_mag_mel_log, m_real_mel, m
     else:
         m_mag = np.exp(la.sp_mel_unwarp(m_mag_mel_log, fft_len_half, alpha=alpha, in_type='log'))
 
+
+    # Debug: ------------------------------------------------------------------------
     # Phase feats mel-unwarp:
-    bin_r   = lu.round_to_int(la.hz_to_bin(crsf_cf + crsf_bw/2.0, fft_len, fs))
-    v_bins_mel  = la.build_mel_curve(alpha, fft_len_half)[:bin_r]
-    m_real_shrt = la.unwarp_from_fbank(m_real_mel, v_bins_mel)
-    m_imag_shrt = la.unwarp_from_fbank(m_imag_mel, v_bins_mel)
-    m_real = np.hstack((m_real_shrt, m_real_shrt[:,-1][:,None] + np.zeros((nfrms, fft_len_half-bin_r))))
-    m_imag = np.hstack((m_imag_shrt, m_imag_shrt[:,-1][:,None] + np.zeros((nfrms, fft_len_half-bin_r))))
+    # Just only of one of these is used:
+    bin_cf = lu.round_to_int(la.hz_to_bin(crsf_cf, fft_len, fs))
+    bin_l  = lu.round_to_int(la.hz_to_bin(crsf_cf - crsf_bw/2.0, fft_len, fs))
+    bin_r  = lu.round_to_int(la.hz_to_bin(crsf_cf + crsf_bw/2.0, fft_len, fs))
+
+    max_bin_ph = bin_cf # bin_r # bin_l
+
+    v_bins_mel  = la.build_mel_curve(alpha, fft_len_half)[:max_bin_ph]
+
+    # Debug:
+    #m_real_shrt = la.unwarp_from_fbank(m_real_mel, v_bins_mel, interp_kind='slinear')
+    #m_imag_shrt = la.unwarp_from_fbank(m_imag_mel, v_bins_mel, interp_kind='slinear')
+
+    m_real_shrt = la.unwarp_from_fbank(m_real_mel, v_bins_mel, interp_kind='quadratic')
+    m_imag_shrt = la.unwarp_from_fbank(m_imag_mel, v_bins_mel, interp_kind='quadratic')
+
+    m_real = np.hstack((m_real_shrt, m_real_shrt[:,-1][:,None] + np.zeros((nfrms, fft_len_half-max_bin_ph))))
+    m_imag = np.hstack((m_imag_shrt, m_imag_shrt[:,-1][:,None] + np.zeros((nfrms, fft_len_half-max_bin_ph))))
 
     #-------------------------------------------------------------------------------
     '''
@@ -921,7 +935,6 @@ def synthesis_from_compressed_type1_with_phase_comp(m_mag_mel_log, m_real_mel, m
     m_ap_cmplx_spec[~v_voi,:] *= v_line
 
 
-
     # Periodic Spectrum Generation:============================================
     if per_phase_type=='magphase':
         m_per_cmplx_ph = m_real + m_imag * 1j
@@ -932,6 +945,11 @@ def synthesis_from_compressed_type1_with_phase_comp(m_mag_mel_log, m_real_mel, m
         m_per_cmplx_ph = m_per_cmplx_ph / m_per_cmplx_ph_mag
 
         m_per_cmplx_spec = m_mag * m_per_cmplx_ph
+
+        if False:
+            nx=73; figure(); plot(m_real[nx,:]); plot(m_imag[nx,:]); grid()
+            nx=146; figure(); plot(np.angle(m_per_cmplx_ph[nx,:])); grid()
+            nx=146; figure(); plot(np.angle(m_per_cmplx_ph[nx,:])); grid()
 
     if per_phase_type=='linear':
         m_per_cmplx_spec = m_mag
@@ -957,19 +975,73 @@ def synthesis_from_compressed_type1_with_phase_comp(m_mag_mel_log, m_real_mel, m
 
     # Synthesis:
     m_syn_cmplx = m_per_cmplx_spec + m_ap_cmplx_spec
+
+    #Protection:
+    #m_syn_cmplx[:,0].real  = np.absolute(m_syn_cmplx[:,0])
+    #m_syn_cmplx[:,-1].real = np.absolute(m_syn_cmplx[:,-1])
+    m_syn_cmplx[:,0].imag  = 0.0
+    m_syn_cmplx[:,-1].imag = 0.0
+
     m_syn_cmplx = la.add_hermitian_half(m_syn_cmplx, data_type='complex')
     m_syn_frms  = np.fft.ifft(m_syn_cmplx).real
     m_syn_frms  = np.fft.fftshift(m_syn_frms, axes=1)
-    v_syn_sig   = ola(m_syn_frms, v_pm, win_func=None)
+
+    # Debug:
+    #m_syn_frms[~v_voi,:] = 0.0
+    #m_syn_frms[71,:] = 0.0
+    #m_syn_frms[72,:] = 0.0
+    #m_syn_frms[73,:] = 0.0
+
+    # Window anti-ringing:
+    frmlen = m_syn_frms.shape[1]
+    v_shift_ext = np.r_[v_shift[0], v_shift, v_shift[-1], v_shift[-1]] # recover first shift (estimate)
+    for nxf in xrange(nfrms):
+        v_win = la.gen_centr_win(v_shift_ext[nxf]+v_shift_ext[nxf+1], v_shift_ext[nxf+2]+v_shift_ext[nxf+3], frmlen, win_func=raised_hanning, b_fill_w_bound_val=True)
+        m_syn_frms[nxf,:] *= v_win
+
+
+    if False:
+        # En hvd_595 problema de spike around frame 290
+        # Frame 73 in hvd_595 producing pre ringing in bins 290 and 338.
+        m_syn_mag_db = la.db(np.absolute(m_syn_cmplx))
+        plm(m_syn_mag_db)
+        nx=73; figure(); plot(np.angle(m_syn_cmplx[nx,:]), '.-'); grid()
+        nx=73; figure(); plot(m_syn_mag_db[nx,:], '.-'); grid()
+
+        plm(m_syn_frms)
+        pl(m_syn_frms[292:294+1,:].T)
+        pl(m_syn_frms[292:297+1,:].T)
+
+        pl(m_syn_frms[292,:])
+
+        pl(m_syn_frms[252:258+1,:].T)
+
+
+    v_syn_sig = ola(m_syn_frms, v_pm, win_func=None)
 
     # HPF - Output:============================================================
+    # NOTE: The HPF unbalance the polarity of the signal, because it removed DC!
+    '''
     fc    = 60
     order = 4
     fc_norm   = fc / (fs / 2.0)
     bc, ac    = signal.ellip(order,0.5 , 80, fc_norm, btype='highpass')
     v_syn_sig = signal.lfilter(bc, ac, v_syn_sig)
+    #'''
+
+    # Butterworth:
+    order = 4
+    fc = 40 # in Hz
+    fc_norm = fc /(fs/2.0)
+    v_b, v_a = signal.butter(order, fc_norm, btype='highpass')
+    v_syn_sig = signal.lfilter(v_b, v_a, v_syn_sig)
+
+    if False:
+        fvtool(v_b, v_a, fs=48000)
 
     return v_syn_sig
+
+
 
 #==============================================================================
 def synthesis_from_compressed_type1(m_mag_mel_log, m_real_mel, m_imag_mel, v_lf0, fs, fft_len=None,
@@ -1123,6 +1195,10 @@ def synthesis_from_compressed_type1(m_mag_mel_log, m_real_mel, m_imag_mel, v_lf0
     m_syn_cmplx = la.add_hermitian_half(m_syn_cmplx, data_type='complex')
     m_syn_frms  = np.fft.ifft(m_syn_cmplx).real
     m_syn_frms  = np.fft.fftshift(m_syn_frms, axes=1)
+
+    # Debug:
+    #m_syn_frms[~v_voi,:] = 0.0
+
     v_syn_sig   = ola(m_syn_frms, v_pm, win_func=None)
 
     # HPF - Output:============================================================
@@ -2311,6 +2387,14 @@ def post_filter_dev(m_mag_mel_log, fs, av_len_at_zero=None, av_len_at_nyq=None, 
 
 
 
+def win_squared(L):
+    v_win = np.zeros(L)
+    quarter = np.floor(L / 4.0).astype(int)
+    half = np.floor(L / 2.0).astype(int)
+    v_win[quarter:quarter+half] = 1.0
+    return v_win
+
+
 
 def format_for_modelling_phase_comp(m_mag, m_real, m_imag, v_f0, fs, nbins_mel=60, nbins_phase=10, b_mag_fbank_mel=False):
     '''
@@ -2327,7 +2411,11 @@ def format_for_modelling_phase_comp(m_mag, m_real, m_imag, v_f0, fs, nbins_mel=6
 
     # Mag to Log-Mag-Mel (compression):
     if b_mag_fbank_mel:
+
+        # Debug:
         m_mag_mel = la.sp_mel_warp_fbank(m_mag, nbins_mel, alpha=alpha)
+        #m_mag_mel = la.sp_mel_warp_fbank_2d(m_mag, nbins_mel, alpha=alpha)
+
     else:
         m_mag_mel = la.sp_mel_warp(m_mag, nbins_mel, alpha=alpha, in_type=3)
 
@@ -2337,23 +2425,128 @@ def format_for_modelling_phase_comp(m_mag, m_real, m_imag, v_f0, fs, nbins_mel=6
     crsf_cf, crsf_bw = define_crossfade_params(fs)
     fft_len_half = m_mag.shape[1]
     fft_len = 2 * (fft_len_half - 1)
-    bin_r   = lu.round_to_int(la.hz_to_bin(crsf_cf + crsf_bw/2.0, fft_len, fs))
-    m_real_shrt = m_real[:,:bin_r]
-    m_imag_shrt = m_imag[:,:bin_r]
 
-    v_bins_mel = la.build_mel_curve(alpha, fft_len_half)[:bin_r]
-    m_real_mel = la.apply_average_fbank(m_real_shrt, v_bins_mel, nbins_phase)
-    m_imag_mel = la.apply_average_fbank(m_imag_shrt, v_bins_mel, nbins_phase)
+    # Debug:-------------------------------------------------------------------------
+    # Just only of one of these is used:
+    bin_cf = lu.round_to_int(la.hz_to_bin(crsf_cf, fft_len, fs))
+    bin_l  = lu.round_to_int(la.hz_to_bin(crsf_cf - crsf_bw/2.0, fft_len, fs))
+    bin_r  = lu.round_to_int(la.hz_to_bin(crsf_cf + crsf_bw/2.0, fft_len, fs))
+
+    max_bin_ph = bin_cf # bin_r # bin_l
+
+    v_bins_mel = la.build_mel_curve(alpha, fft_len_half)[:max_bin_ph]
+    m_real_shrt = m_real[:,:max_bin_ph]
+    m_imag_shrt = m_imag[:,:max_bin_ph]
+    #--------------------------------------------------------------------------------
+    m_real_mel = la.apply_fbank(m_real_shrt, v_bins_mel, nbins_phase)[0]
+    m_imag_mel = la.apply_fbank(m_imag_shrt, v_bins_mel, nbins_phase)[0]
+
+
+    # Debug (phase ratio):
+    if False:
+        nfrms = m_mag.shape[0]
+        #m_ratio_shrt = np.arctan(np.abs(m_imag_shrt / m_real_shrt))
+        m_ratio_shrt = np.arctan((m_imag_shrt / m_real_shrt))
+        m_ratio_mel  = la.apply_fbank(m_ratio_shrt, v_bins_mel, nbins_phase)[0]
+        m_ratio_shrt_rec = la.unwarp_from_fbank(m_ratio_mel, v_bins_mel, interp_kind='slinear')
+
+        m_ratio_rec  = np.hstack((m_ratio_shrt_rec, m_ratio_shrt_rec[:,-1][:,None] + np.zeros((nfrms, fft_len_half-max_bin_ph))))
+
+        m_ratio_mel_from_params = np.arctan(np.abs(m_imag_mel / m_real_mel))
+        #m_ratio_from_params_shrt_rec = la.unwarp_from_fbank(m_real_mel, v_bins_mel, interp_kind='quadratic')
+
+        m_real_shrt_rec = la.unwarp_from_fbank(m_real_mel, v_bins_mel, interp_kind='quadratic')
+        m_imag_shrt_rec = la.unwarp_from_fbank(m_imag_mel, v_bins_mel, interp_kind='quadratic')
+
+
+        m_real_rec  = np.hstack((m_real_shrt_rec, m_real_shrt_rec[:,-1][:,None] + np.zeros((nfrms, fft_len_half-max_bin_ph))))
+        m_imag_rec  = np.hstack((m_imag_shrt_rec, m_imag_shrt_rec[:,-1][:,None] + np.zeros((nfrms, fft_len_half-max_bin_ph))))
+
+        m_cmplx_ph_shrt =  np.angle(m_real_shrt[nx,:] + m_imag_shrt[nx,:] * 1j)
+        if True: import ipdb; ipdb.set_trace(context=8)  # breakpoint cfaa609c //
+
+        # Plots:
+        nx=111; figure(); plot(m_cmplx_ph_shrt) ; plot(np.abs(m_cmplx_ph_shrt)); grid()
+
+
+        #-----------------------------------------------
+        plm(m_ratio_shrt)
+        nx=111; figure(); plot(m_real_shrt[nx,:],'.-'); plot(m_ratio_shrt[nx,:],'.-'); grid()
+
+        nx=111; figure(); plot(m_real_mel[nx,:],'.-'); plot(m_ratio_mel[nx,:],'.-'); plot(m_ratio_mel_from_params[nx,:],'.-'); grid()
+
+
+
+
+
+
 
     # Debug (reconstruction):
-    #nfrms = m_real_mel.shape[0]
-    #v_bins_mel_rec  = la.build_mel_curve(alpha, fft_len_half)[:bin_r]
-    #m_real_shrt_rec = la.unwarp_from_fbank(m_real_mel, v_bins_mel_rec)
-    #m_real_rec = np.hstack((m_real_shrt_rec, m_real_shrt_rec[:,-1][:,None] * np.ones((nfrms, fft_len_half-bin_r))))
-
+    # Phase feats mel-unwarp:
     if False:
-        nx=160; figure(); plot(m_real[nx,:]); plot(m_real_rec[nx,:]); grid()
-        nx=160; figure(); plot(m_real_mel[nx,:]); grid()
+        nfrms = m_mag.shape[0]
+
+        #bin_r   = lu.round_to_int(la.hz_to_bin(crsf_cf + crsf_bw/2.0, fft_len, fs))
+        v_bins_mel  = la.build_mel_curve(alpha, fft_len_half)[:max_bin_ph]
+
+        #m_real_shrt = la.unwarp_from_fbank(m_real_mel, v_bins_mel, interp_kind='slinear')
+        #m_imag_shrt = la.unwarp_from_fbank(m_imag_mel, v_bins_mel, interp_kind='slinear')
+        m_real_shrt_rec = la.unwarp_from_fbank(m_real_mel, v_bins_mel, interp_kind='quadratic')
+        m_imag_shrt_rec = la.unwarp_from_fbank(m_imag_mel, v_bins_mel, interp_kind='quadratic')
+
+        m_real_rec  = np.hstack((m_real_shrt_rec, m_real_shrt_rec[:,-1][:,None] + np.zeros((nfrms, fft_len_half-max_bin_ph))))
+        m_imag_rec  = np.hstack((m_imag_shrt_rec, m_imag_shrt_rec[:,-1][:,None] + np.zeros((nfrms, fft_len_half-max_bin_ph))))
+
+
+
+        nx=111;
+        v_ratio =  m_imag[nx,:] / m_real[nx,:]
+        v_fact  =  m_imag[nx,:] * m_real[nx,:]
+
+        #v_ratio_2 =  (m_imag[nx,:] + 2.0) / (m_real[nx,:] + 2.0)
+        m_ratio =  (m_imag) / (m_real)
+        m_ratio_2 =  (m_imag + 2.0) / (m_real + 2.0)
+
+        m_real_voi = m_real
+        m_real_voi[~(v_voi).astype(bool),:] = 0.0
+        m_real_td = np.fft.ifft(m_real_voi[:,:max_bin_ph]).real
+
+
+        # Plots:
+        nx=111; figure(); plot(m_real[nx,:]); plot(m_real_rec[nx,:]); grid()
+        nx=111; figure(); plot(m_real[nx,:]); plot(m_imag[nx,:]); grid()
+        #nx=111; figure(); plot(m_real[nx,:]); plot(m_imag[nx,:]); plot(v_ratio); plot(np.arctan(v_ratio)); grid()
+        nx=111; figure(); plot(m_real[nx,:]); plot(m_imag[nx,:]); plot(v_ratio); plot(np.arctan(v_ratio)); grid()
+        nx=111; figure(); plot(m_real[nx,:]); plot(m_imag[nx,:]); plot(v_ratio); plot(np.arctan(v_ratio)); plot(np.angle(m_real[nx,:] + m_imag[nx,:] * 1j))  ; grid()
+        #nx=111; figure(); plot(m_real[nx,:]); plot(m_imag[nx,:]); plot(np.arctan(v_ratio)); plot(np.angle(m_real[nx,:] + m_imag[nx,:] * 1j))  ; grid()
+
+        #nx=111; figure(); plot(m_real[nx,:], '.-'); plot(m_imag[nx,:], '.-'); plot(np.arctan(v_ratio), '.-'); plot(np.arctan(v_ratio_2), '.-'); grid()
+        nx=111; figure(); plot(m_real[nx,:], '.-'); plot(m_imag[nx,:], '.-'); plot(np.arctan(m_ratio[nx,:]), '.-'); grid()
+
+        nx=111; figure(); plot(m_real[nx,:]); plot(m_imag[nx,:]); plot(v_fact); grid()
+
+
+
+        nx=73; figure(); plot(m_real[nx,:]); plot(m_real_rec[nx,:]); plot(m_real_rec_max[nx,:]); grid()
+        nx=73; figure(); plot(m_imag[nx,:]); plot(m_imag_rec[nx,:]); plot(m_imag_rec_max[nx,:]); grid()
+        nx=73; figure(); plot(m_ph[nx,:], '.-'); plot(np.angle(m_real_rec[nx,:] + m_imag_rec[nx,:] * 1j), '.-'); plot(np.angle(m_real_rec_max[nx,:] + m_imag_rec_max[nx,:] * 1j), '.-'); grid()
+
+        plm(m_real)
+
+    # Debug (reconstruction):
+    # magnitude:
+    if False:
+        #nfrms = m_mag.shape[0]
+        m_mag_log     = la.log(m_mag)
+        m_mag_log_rec = la.sp_mel_unwarp(m_mag_mel_log, fft_len_half, alpha=alpha, in_type='log')
+
+        plm(m_mag_log_rec)
+
+
+        pl(m_mag_log[252:255,:].T)
+        pl(m_mag_log_rec[252:255,:].T)
+
+        figure(); plot(m_mag_log[252:255,:].T); plot(m_mag_log_rec[252:255,:].T); grid()
 
     # -----------------------------------------------
     #m_imag_mel = la.sp_mel_warp(m_imag, nbins_mel, alpha=alpha, in_type=2)
@@ -2603,8 +2796,8 @@ def analysis_compressed_type1(wav_file, fft_len=None, out_dir=None, nbins_mel=60
     return m_mag_mel_log, m_real_mel, m_imag_mel, v_lf0_smth, v_shift, fs, fft_len
 
 
-def analysis_compressed_type1_with_phase_comp_defi(wav_file, fft_len=None, out_dir=None,
-                                                    nbins_mel=60, nbins_phase=10, const_rate_ms=-1.0):
+def analysis_compressed_type1_with_phase_comp(wav_file, fft_len=None, out_dir=None,
+                                                    nbins_mel=60, nbins_phase=10, const_rate_ms=-1.0, b_mag_fbank_mel=False):
 
     '''
 
@@ -2642,7 +2835,6 @@ def analysis_compressed_type1_with_phase_comp_defi(wav_file, fft_len=None, out_d
         nx=200; plot(m_real_mel_orig[nx,:]); plot(m_real_mel[nx,:]); grid()
         nx=200; plot(m_imag_mel_orig[nx,:]); plot(m_imag_mel[nx,:]); grid()
 
-
     fft_len = 2*(np.size(m_mag,1) - 1)
 
     # Save features:
@@ -2657,75 +2849,6 @@ def analysis_compressed_type1_with_phase_comp_defi(wav_file, fft_len=None, out_d
         return
 
     return m_mag_mel_log, m_real_mel, m_imag_mel, v_lf0_smth, v_shift, fs, fft_len
-
-
-
-def analysis_compressed_type1_with_phase_comp(wav_file, fft_len=None, out_dir=None, nbins_mel=60,
-                                                 nbins_phase=45, const_rate_ms=-1.0, n_phase_cmp_coeffs=10):
-
-    '''
-    NOT FINISHED (and not definitive!)
-    '''
-
-    # Analysis:
-    m_mag, m_real, m_imag, v_f0, fs, v_shift = analysis_lossless(wav_file, fft_len=fft_len)
-
-
-    def phase_feats_mel_unwarp(m_ph_mel, alpha, ncoeffs_mag):
-        ncoeffs_cmp = m_ph_mel.shape[1]
-        f_intrp_ph = interpolate.interp1d(np.arange(ncoeffs_cmp), m_ph_mel, kind='nearest', fill_value='extrapolate')
-        m_ph_mel = f_intrp_ph(np.arange(ncoeffs_mag))
-        m_ph = la.sp_mel_unwarp(m_ph_mel, fft_len_half, alpha=alpha, in_type='log')
-        return m_ph
-
-    # Debug: smoothing. interesante resultado. NO BORRAR!!
-    #m_mag = la.smooth_by_conv(m_mag, v_win=np.r_[0.3, 0.4, 0.3])
-    #m_mag = np.exp(la.smooth_by_conv(la.log(m_mag), v_win=np.ones(3)))
-
-    # To constant rate:
-    if const_rate_ms>0.0:
-        interp_type = 'linear' #  'quadratic' # 'linear'
-        v_pm_smpls = la.shift_to_pm(v_shift)
-        m_mag  = interp_from_variable_to_const_frm_rate(m_mag,  v_pm_smpls, const_rate_ms, fs, interp_type=interp_type)
-        m_real = interp_from_variable_to_const_frm_rate(m_real, v_pm_smpls, const_rate_ms, fs, interp_type=interp_type)
-        m_imag = interp_from_variable_to_const_frm_rate(m_imag, v_pm_smpls, const_rate_ms, fs, interp_type=interp_type)
-
-        # f0:
-        v_voi = v_f0>1.0
-        v_f0  = interp_from_variable_to_const_frm_rate(np.r_[ v_f0[v_voi][0],v_f0[v_voi], v_f0[v_voi][-1] ], np.r_[ 0, v_pm_smpls[v_voi], v_pm_smpls[-1] ], const_rate_ms, fs, interp_type=interp_type).squeeze()
-        v_voi = interp_from_variable_to_const_frm_rate(v_voi, v_pm_smpls, const_rate_ms, fs, interp_type=interp_type)>0.5
-        v_f0  *= v_voi # Double check this. At the beginning of voiced segments.
-
-    # Formatting for Acoustic Modelling:
-    m_mag_mel_log, m_real_mel, m_imag_mel, v_lf0_smth = format_for_modelling(m_mag, m_real, m_imag, v_f0, fs, nbins_mel=nbins_mel, nbins_phase=nbins_phase)
-    fft_len = 2*(np.size(m_mag,1) - 1)
-
-
-    # Phase feats compression:-------------------------------------------------------------------
-    m_real_rcep = la.rceps(m_real_mel, in_type='log', out_type='compact')
-    m_real_mel_cmp = la.remove_hermitian_half(np.fft.fft(m_real_rcep[:,:n_phase_cmp_coeffs], n=2*(n_phase_cmp_coeffs-1)).real)
-    #m_real_cmp = phase_feats_mel_unwarp(m_real_mel_cmp, alpha, 60)
-
-    m_imag_rcep = la.rceps(m_imag_mel, in_type='log', out_type='compact')
-    m_imag_mel_cmp = la.remove_hermitian_half(np.fft.fft(m_imag_rcep[:,:n_phase_cmp_coeffs], n=2*(n_phase_cmp_coeffs-1)).real)
-    #m_imag_cmp = phase_feats_mel_unwarp(m_imag_mel_cmp, alpha, 60)
-
-    #---------------------------------------------------------------------------------------------
-
-    # Save features:
-    if type(out_dir) is str:
-        file_id = os.path.basename(wav_file).split(".")[0]
-        write_featfile(m_mag_mel_log, out_dir, file_id + '.mag')
-        write_featfile(m_real_mel   , out_dir, file_id + '.real')
-        write_featfile(m_imag_mel   , out_dir, file_id + '.imag')
-        write_featfile(v_lf0_smth   , out_dir, file_id + '.lf0')
-        if const_rate_ms<=0.0: # If variable rate, save shift files.
-            write_featfile(v_shift      , out_dir, file_id + '.shift')
-        return
-
-    return m_mag_mel_log, m_real_mel, m_imag_mel, v_lf0_smth, v_shift, fs, fft_len
-
-
 
 def compute_imag_from_real(start_sign, v_real):
     '''
