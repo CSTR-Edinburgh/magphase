@@ -2544,6 +2544,12 @@ def analysis_lossless(wav_file, fft_len=None, out_dir=None):
     # Getting high-ress magphase feats:
     m_mag, m_real, m_imag, v_f0 = compute_lossless_feats(m_fft, v_shift, v_voi, fs)
 
+
+    # DEBUG: Aqui: agregar minimum phase:
+    # 1. Consytruct minimum phase from m_mag.
+    # 2. Use "compute_lossless_feats" to compute feats from minimum phase complex spec.
+
+
     # If output directory provided, features are written to disk:
     if type(out_dir) is str:
         file_id = os.path.basename(wav_file).split(".")[0]
@@ -2626,8 +2632,17 @@ def analysis_compressed_type1_with_phase_comp_defi(wav_file, fft_len=None, out_d
         v_f0  *= v_voi # Double check this. At the beginning of voiced segments.
 
     # Formatting for Acoustic Modelling:
-    #m_mag_mel_log, m_real_mel, m_imag_mel, v_lf0_smth = format_for_modelling(m_mag, m_real, m_imag, v_f0, fs, nbins_mel=nbins_mel, nbins_phase=nbins_phase)
+    # Debug:
+
+    m_mag_mel_log_orig, m_real_mel_orig, m_imag_mel_orig, v_lf0_smth_orig = format_for_modelling(m_mag, m_real, m_imag, v_f0, fs, nbins_mel=nbins_mel, nbins_phase=nbins_phase)
+
     m_mag_mel_log, m_real_mel, m_imag_mel, v_lf0_smth = format_for_modelling_phase_comp(m_mag, m_real, m_imag, v_f0, fs, nbins_mel=nbins_mel, nbins_phase=nbins_phase)
+
+    if False:
+        nx=200; plot(m_real_mel_orig[nx,:]); plot(m_real_mel[nx,:]); grid()
+        nx=200; plot(m_imag_mel_orig[nx,:]); plot(m_imag_mel[nx,:]); grid()
+
+
     fft_len = 2*(np.size(m_mag,1) - 1)
 
     # Save features:
