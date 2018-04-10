@@ -931,7 +931,7 @@ def sp_mel_unwarp_fbank(m_mag_mel, nbins, alpha=0.77):
     #v_bins_warp = np.arctan(  (1-alpha**2) * np.sin(v_bins) / ((1+alpha**2)*np.cos(v_bins) - 2*alpha) )
     #v_bins_warp[v_bins_warp < 0] += np.pi
     v_bins_warp = build_mel_curve(alpha, nbins, amp=np.pi)
-    m_mag = unwarp_from_fbank(m_mag_mel, nbins, v_bins_warp)
+    m_mag = unwarp_from_fbank(m_mag_mel, v_bins_warp)
 
     '''
     # Bands gen:
