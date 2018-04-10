@@ -26,7 +26,7 @@ MAGIC = -1.0E+10 # logarithm floor (the same as SPTK)
 
 #-------------------------------------------------------------------------------
 
-
+'''
 def parse_config():
     global _reaper_bin, _sptk_mcep_bin
     _curr_dir = os.path.dirname(os.path.realpath(__file__))
@@ -43,7 +43,26 @@ def parse_config():
         _sptk_mcep_bin = _config.get('TOOLS', 'sptk_mcep')
     return
 parse_config()
+'''
 
+
+
+def parse_config():
+    global _reaper_bin, _sptk_dir
+    _curr_dir = os.path.dirname(os.path.realpath(__file__))
+
+    _reaper_bin = os.path.realpath(_curr_dir + '/../tools/bin/reaper')
+    _sptk_dir   = os.path.realpath(_curr_dir + '/../tools/bin')
+
+    _config = SafeConfigParser()
+    _config.read(_curr_dir + '/../config.ini')
+
+    #if not ((_config.get('TOOLS', 'reaper')=='') or (_config.get('TOOLS', 'sptk_mcep')=='')):
+    if not (_config.get('TOOLS', 'bin_dir')==''):
+        _reaper_bin    = os.path.join(_config.get('TOOLS', 'bin_dir'), 'reaper')
+        _sptk_dir      = _config.get('TOOLS', 'bin_dir')
+    return
+parse_config()
 
 #------------------------------------------------------------------------------
 
@@ -688,8 +707,9 @@ def sp_to_mcep(m_sp, n_coeffs=60, alpha=0.77, in_type=3, fft_len=0):
     if fft_len is 0: # case fft automatic
         fft_len = 2*(np.size(m_sp,1) - 1)
 
-    # MCEP:      
-    curr_cmd = _sptk_mcep_bin + " -a %1.2f -m %d -l %d -e 1.0E-8 -j 0 -f 0.0 -q %d %s > %s" % (alpha, n_coeffs-1, fft_len, in_type, temp_sp, temp_mgc)
+    # MCEP:
+    sptk_mcep_bin = os.path.join(_sptk_dir, 'mcep')
+    curr_cmd = sptk_mcep_bin + " -a %1.2f -m %d -l %d -e 1.0E-8 -j 0 -f 0.0 -q %d %s > %s" % (alpha, n_coeffs-1, fft_len, in_type, temp_sp, temp_mgc)
     call(curr_cmd, shell=True)
     
     # Read MGC File:

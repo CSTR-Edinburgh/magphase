@@ -1045,7 +1045,7 @@ def synthesis_from_compressed_type1_with_phase_comp(m_mag_mel_log, m_real_mel, m
 
 #==============================================================================
 def synthesis_from_compressed_type1(m_mag_mel_log, m_real_mel, m_imag_mel, v_lf0, fs, fft_len=None,
-                                    b_voi_ap_win=True, b_fbank_mel=False, const_rate_ms=-1.0, per_phase_type='magphase'):
+                                    b_voi_ap_win=True, b_fbank_mel=False, b_const_rate=False, per_phase_type='magphase'):
 
     '''
     b_fbank_mel: If True, Mel compression done by the filter bank approach. Otherwise, it uses sptk mcep related funcs.
@@ -1088,13 +1088,14 @@ def synthesis_from_compressed_type1(m_mag_mel_log, m_real_mel, m_imag_mel, v_lf0
     m_imag = la.sp_mel_unwarp(m_imag_mel, fft_len_half, alpha=alpha, in_type='log')
 
     # Constant to variable frame rate:============================================
-    if const_rate_ms>0.0:
+    if b_const_rate:
+        const_rate_ms = 5.0
         interp_type = 'linear' #'quadratic' , 'cubic'
         v_shift, v_frm_locs_smpls = get_shifts_and_frm_locs_from_const_shifts(v_shift, const_rate_ms, fs, interp_type=interp_type)
-        m_mag  = interp_from_const_to_variable_rate(m_mag,    v_frm_locs_smpls, const_rate_ms, fs, interp_type=interp_type)
-        m_real = interp_from_const_to_variable_rate(m_real,   v_frm_locs_smpls, const_rate_ms, fs, interp_type=interp_type)
-        m_imag = interp_from_const_to_variable_rate(m_imag,   v_frm_locs_smpls, const_rate_ms, fs, interp_type=interp_type)
-        v_voi  = interp_from_const_to_variable_rate(v_voi, v_frm_locs_smpls, const_rate_ms, fs, interp_type=interp_type) > 0.5
+        m_mag  = interp_from_const_to_variable_rate(m_mag,  v_frm_locs_smpls, const_rate_ms, fs, interp_type=interp_type)
+        m_real = interp_from_const_to_variable_rate(m_real, v_frm_locs_smpls, const_rate_ms, fs, interp_type=interp_type)
+        m_imag = interp_from_const_to_variable_rate(m_imag, v_frm_locs_smpls, const_rate_ms, fs, interp_type=interp_type)
+        v_voi  = interp_from_const_to_variable_rate(v_voi,  v_frm_locs_smpls, const_rate_ms, fs, interp_type=interp_type) > 0.5
         v_f0   = shift_to_f0(v_shift, v_voi, fs, out='f0', b_smooth=False)
         nfrms  = v_shift.size
 
@@ -2790,18 +2791,14 @@ def analysis_compressed_type1(wav_file, fft_len=None, out_dir=None, nbins_mel=60
         write_featfile(m_imag_mel   , out_dir, file_id + '.imag')
         write_featfile(v_lf0_smth   , out_dir, file_id + '.lf0')
         if const_rate_ms<=0.0: # If variable rate, save shift files.
-            write_featfile(v_shift      , out_dir, file_id + '.shift')
+            write_featfile(v_shift  , out_dir, file_id + '.shift')
         return
 
     return m_mag_mel_log, m_real_mel, m_imag_mel, v_lf0_smth, v_shift, fs, fft_len
 
 
 def analysis_compressed_type1_with_phase_comp(wav_file, fft_len=None, out_dir=None,
-                                                    nbins_mel=60, nbins_phase=10, const_rate_ms=-1.0, b_mag_fbank_mel=False):
-
-    '''
-
-    '''
+                                                    nbins_mel=60, nbins_phase=10, b_const_rate=False, b_mag_fbank_mel=False):
 
     # Analysis:
     m_mag, m_real, m_imag, v_f0, fs, v_shift = analysis_lossless(wav_file, fft_len=fft_len)
@@ -2811,7 +2808,8 @@ def analysis_compressed_type1_with_phase_comp(wav_file, fft_len=None, out_dir=No
     #m_mag = np.exp(la.smooth_by_conv(la.log(m_mag), v_win=np.ones(3)))
 
     # To constant rate:
-    if const_rate_ms>0.0:
+    if b_const_rate:
+        const_rate_ms = 5.0
         interp_type = 'linear' #  'quadratic' # 'linear'
         v_pm_smpls = la.shift_to_pm(v_shift)
         m_mag  = interp_from_variable_to_const_frm_rate(m_mag,  v_pm_smpls, const_rate_ms, fs, interp_type=interp_type)
@@ -2844,8 +2842,8 @@ def analysis_compressed_type1_with_phase_comp(wav_file, fft_len=None, out_dir=No
         write_featfile(m_real_mel   , out_dir, file_id + '.real')
         write_featfile(m_imag_mel   , out_dir, file_id + '.imag')
         write_featfile(v_lf0_smth   , out_dir, file_id + '.lf0')
-        if const_rate_ms<=0.0: # If variable rate, save shift files.
-            write_featfile(v_shift      , out_dir, file_id + '.shift')
+        if not b_const_rate: # If variable rate, save shift files.
+            write_featfile(v_shift , out_dir, file_id + '.shift')
         return
 
     return m_mag_mel_log, m_real_mel, m_imag_mel, v_lf0_smth, v_shift, fs, fft_len
@@ -2955,7 +2953,15 @@ def analysis_compressed_type2(wav_file, fft_len=None, out_dir=None, nbins_mel=60
     return m_mag_mel_log, m_real_mel, m_imag_mel, v_lf0_smth, v_shift, fs, fft_len, v_lgain
 
 
-def synthesis_from_acoustic_modelling(in_feats_dir, filename_token, out_syn_dir, nbins_mel, nbins_phase, fs, fft_len=None, b_postfilter=False, magphase_type='type2'):
+def synthesis_from_acoustic_modelling(in_feats_dir, filename_token, out_syn_dir, nbins_mel, nbins_phase, fs, fft_len=None, pf_type='no', magphase_type='type1', b_const_rate=False):
+    '''
+    pf_type: Postfilter type: 'merlin' (Merlin's style), 'magphase' (MagPhase's own postfilter (in development)), or 'no'.
+    '''
+
+    #if pf_type=='merlin':
+    #    post_filter_merlin()
+    # Display:
+    print("\nSynthesising file: " + filename_token + '.wav............................')
 
     # Reading parameter files:
     m_mag_mel_log = lu.read_binfile(in_feats_dir + '/' + filename_token + '.mag' , dim=nbins_mel)
@@ -2963,14 +2969,14 @@ def synthesis_from_acoustic_modelling(in_feats_dir, filename_token, out_syn_dir,
     m_imag_mel    = lu.read_binfile(in_feats_dir + '/' + filename_token + '.imag', dim=nbins_phase)
     v_lf0         = lu.read_binfile(in_feats_dir + '/' + filename_token + '.lf0' , dim=1)
 
-    print('DEBUG: Activated!!')
-    if b_postfilter:
-        print('DEBUG: Using MagPhase postfilter!!')
+    if pf_type=='magphase':
+        print('Using MagPhase postfilter!')
         m_mag_mel_log = post_filter(m_mag_mel_log, fs)
+
 
     # Waveform generation:
     if magphase_type=='type1':
-        v_syn_sig = synthesis_from_compressed_type1(m_mag_mel_log, m_real_mel, m_imag_mel, v_lf0, fs, fft_len=fft_len)
+        v_syn_sig = synthesis_from_compressed_type1(m_mag_mel_log, m_real_mel, m_imag_mel, v_lf0, fs, fft_len=fft_len, b_const_rate=b_const_rate)
     elif magphase_type=='type2':
         v_syn_sig = synthesis_from_compressed_type2(m_mag_mel_log, m_real_mel, m_imag_mel, v_lf0, fs, fft_len=fft_len, const_rate_ms=5)
 
@@ -3114,5 +3120,54 @@ def griffin_lim(S, fs, fft_len, niters=100):
     return y
 '''
 
+'''
+def post_filter_merlin(mgc_file_in, mgc_file_out, mgc_dim, pf_coef, fw_coef, co_coef, fl_coef, gen_dir, cfg):
 
+    #TODO: Add note about Merlin copyright
 
+    SPTK = cfg.SPTK
+
+    line = "echo 1 1 "
+    for i in range(2, mgc_dim):
+        line = line + str(pf_coef) + " "
+
+    run_process('{line} | {x2x} +af > {weight}'
+                .format(line=line, x2x=SPTK['X2X'], weight=os.path.join(gen_dir, 'weight')))
+
+    run_process('{freqt} -m {order} -a {fw} -M {co} -A 0 < {mgc} | {c2acr} -m {co} -M 0 -l {fl} > {base_r0}'
+                .format(freqt=SPTK['FREQT'], order=mgc_dim-1, fw=fw_coef, co=co_coef, mgc=mgc_file_in, c2acr=SPTK['C2ACR'], fl=fl_coef, base_r0=mgc_file_in+'_r0'))
+
+    run_process('{vopr} -m -n {order} < {mgc} {weight} | {freqt} -m {order} -a {fw} -M {co} -A 0 | {c2acr} -m {co} -M 0 -l {fl} > {base_p_r0}'
+                .format(vopr=SPTK['VOPR'], order=mgc_dim-1, mgc=mgc_file_in, weight=os.path.join(gen_dir, 'weight'),
+                        freqt=SPTK['FREQT'], fw=fw_coef, co=co_coef,
+                        c2acr=SPTK['C2ACR'], fl=fl_coef, base_p_r0=mgc_file_in+'_p_r0'))
+
+    run_process('{vopr} -m -n {order} < {mgc} {weight} | {mc2b} -m {order} -a {fw} | {bcp} -n {order} -s 0 -e 0 > {base_b0}'
+                .format(vopr=SPTK['VOPR'], order=mgc_dim-1, mgc=mgc_file_in, weight=os.path.join(gen_dir, 'weight'),
+                        mc2b=SPTK['MC2B'], fw=fw_coef,
+                        bcp=SPTK['BCP'], base_b0=mgc_file_in+'_b0'))
+
+    run_process('{vopr} -d < {base_r0} {base_p_r0} | {sopr} -LN -d 2 | {vopr} -a {base_b0} > {base_p_b0}'
+                .format(vopr=SPTK['VOPR'], base_r0=mgc_file_in+'_r0', base_p_r0=mgc_file_in+'_p_r0',
+                        sopr=SPTK['SOPR'],
+                        base_b0=mgc_file_in+'_b0', base_p_b0=mgc_file_in+'_p_b0'))
+
+    run_process('{vopr} -m -n {order} < {mgc} {weight} | {mc2b} -m {order} -a {fw} | {bcp} -n {order} -s 1 -e {order} | {merge} -n {order2} -s 0 -N 0 {base_p_b0} | {b2mc} -m {order} -a {fw} > {base_p_mgc}'
+                .format(vopr=SPTK['VOPR'], order=mgc_dim-1, mgc=mgc_file_in, weight=os.path.join(gen_dir, 'weight'),
+                        mc2b=SPTK['MC2B'],  fw=fw_coef,
+                        bcp=SPTK['BCP'],
+                        merge=SPTK['MERGE'], order2=mgc_dim-2, base_p_b0=mgc_file_in+'_p_b0',
+                        b2mc=SPTK['B2MC'], base_p_mgc=mgc_file_out))
+
+    return
+
+    x2x
+    FREQT
+    C2ACR
+    VOPR
+    MC2B
+    BCP
+    SOPR
+    MERGE
+    B2MC
+'''
