@@ -46,4 +46,4 @@ rm -rf ./REAPER
 rm -rf ./SPTK-3.9
 
 
-echo "All tools successfully compiled!!"
+echo "All tools successfully compiled!"

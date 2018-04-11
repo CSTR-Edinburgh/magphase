@@ -948,7 +948,6 @@ def apply_fbank(m_mag, v_bins_warp, nbands, win_func=np.hanning, mode='average')
         v_winlen[nxb-1] = winlen
         m_fbank[v_cntrs_ext[nxb-1]:(v_cntrs_ext[nxb-1]+winlen),nxb-1] = v_win
 
-
     # Apply filterbank:
     if mode=='average':
         m_mag_mel = np.dot(m_mag, m_fbank)
