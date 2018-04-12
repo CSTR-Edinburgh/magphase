@@ -16,6 +16,7 @@ from scipy import interpolate
 from scipy import signal
 import os
 import warnings
+from subprocess import call
 
 #==============================================================================
 # BODY
@@ -3564,9 +3565,17 @@ def synthesis_from_acoustic_modelling_dev(in_feats_dir, filename_token, out_syn_
     v_lf0         = lu.read_binfile(in_feats_dir + '/' + filename_token + '.lf0' , dim=1)
 
     if pf_type=='magphase':
-        print('Using MagPhase postfilter!')
+        print('Using MagPhase postfilter...')
         m_mag_mel_log = post_filter(m_mag_mel_log, fs)
 
+    elif pf_type=='merlin':
+        print('Using Merlin postfilter...')
+        m_mag_mel_log = post_filter_merlin(m_mag_mel_log, fs)
+
+        # Debug:
+        if False:
+            m_mag_mel_log_pf = post_filter_merlin(m_mag_mel_log, fs)
+            nx=100; figure(); plot(m_mag_mel_log[nx,:]); plot(m_mag_mel_log_pf[nx,:]) ; grid()
 
     # Waveform generation:
     if magphase_type=='type1':
@@ -3716,54 +3725,94 @@ def griffin_lim(S, fs, fft_len, niters=100):
     return y
 '''
 
-'''
-def post_filter_merlin(mgc_file_in, mgc_file_out, mgc_dim, pf_coef, fw_coef, co_coef, fl_coef, gen_dir, cfg):
+def post_filter_merlin(m_mag_mel_log, fs, pf_coef=1.4):
 
-    #TODO: Add note about Merlin copyright
+    '''
+    TODO: Add note about Merlin copyright
+    '''
 
-    SPTK = cfg.SPTK
+    # Constants:
+    fft_len   = 4096
+    minph_ord = fft_len / 2 - 1  # minimum phase order (2047)
+    alpha = define_alpha(fs)
 
-    line = "echo 1 1 "
-    for i in range(2, mgc_dim):
-        line = line + str(pf_coef) + " "
+    # Temp files setup:
+    temp_mcep    = lu.ins_pid('temp.mcep')
+    temp_mcep_pf = lu.ins_pid('temp.mcep_pf')
+    temp_lifter  = lu.ins_pid('temp.lift')
+    temp_r0      = lu.ins_pid('temp.r0')
+    temp_p_r0    = lu.ins_pid('temp.p_r0')
+    temp_b0      = lu.ins_pid('temp.b0')
+    temp_p_b0    = lu.ins_pid('temp.p_b0')
 
-    run_process('{line} | {x2x} +af > {weight}'
-                .format(line=line, x2x=SPTK['X2X'], weight=os.path.join(gen_dir, 'weight')))
 
-    run_process('{freqt} -m {order} -a {fw} -M {co} -A 0 < {mgc} | {c2acr} -m {co} -M 0 -l {fl} > {base_r0}'
-                .format(freqt=SPTK['FREQT'], order=mgc_dim-1, fw=fw_coef, co=co_coef, mgc=mgc_file_in, c2acr=SPTK['C2ACR'], fl=fl_coef, base_r0=mgc_file_in+'_r0'))
+    # Save m_mag_mel_log into mcep:
+    m_mcep = la.rceps(m_mag_mel_log, in_type='log', out_type='compact')
+    lu.write_binfile(m_mcep, temp_mcep)
 
-    run_process('{vopr} -m -n {order} < {mgc} {weight} | {freqt} -m {order} -a {fw} -M {co} -A 0 | {c2acr} -m {co} -M 0 -l {fl} > {base_p_r0}'
-                .format(vopr=SPTK['VOPR'], order=mgc_dim-1, mgc=mgc_file_in, weight=os.path.join(gen_dir, 'weight'),
-                        freqt=SPTK['FREQT'], fw=fw_coef, co=co_coef,
-                        c2acr=SPTK['C2ACR'], fl=fl_coef, base_p_r0=mgc_file_in+'_p_r0'))
+    ncoeffs = m_mag_mel_log.shape[1]
 
-    run_process('{vopr} -m -n {order} < {mgc} {weight} | {mc2b} -m {order} -a {fw} | {bcp} -n {order} -s 0 -e 0 > {base_b0}'
-                .format(vopr=SPTK['VOPR'], order=mgc_dim-1, mgc=mgc_file_in, weight=os.path.join(gen_dir, 'weight'),
-                        mc2b=SPTK['MC2B'], fw=fw_coef,
-                        bcp=SPTK['BCP'], base_b0=mgc_file_in+'_b0'))
+    # Building lifter:
+    lifter = "echo 1 1 " + ("%1.2f " % pf_coef) * (ncoeffs-2)
 
-    run_process('{vopr} -d < {base_r0} {base_p_r0} | {sopr} -LN -d 2 | {vopr} -a {base_b0} > {base_p_b0}'
-                .format(vopr=SPTK['VOPR'], base_r0=mgc_file_in+'_r0', base_p_r0=mgc_file_in+'_p_r0',
-                        sopr=SPTK['SOPR'],
-                        base_b0=mgc_file_in+'_b0', base_p_b0=mgc_file_in+'_p_b0'))
+    # SPTK binaries:
+    x2x_bin   = os.path.join(la._sptk_dir, 'x2x')
+    freqt_bin = os.path.join(la._sptk_dir, 'freqt')
+    c2acr_bin = os.path.join(la._sptk_dir, 'c2acr')
+    vopr_bin  = os.path.join(la._sptk_dir, 'vopr')
+    mc2b_bin  = os.path.join(la._sptk_dir, 'mc2b')
+    bcp_bin   = os.path.join(la._sptk_dir, 'bcp')
+    sopr_bin  = os.path.join(la._sptk_dir, 'sopr')
+    merge_bin = os.path.join(la._sptk_dir, 'merge')
+    b2mc_bin  = os.path.join(la._sptk_dir, 'b2mc')
 
-    run_process('{vopr} -m -n {order} < {mgc} {weight} | {mc2b} -m {order} -a {fw} | {bcp} -n {order} -s 1 -e {order} | {merge} -n {order2} -s 0 -N 0 {base_p_b0} | {b2mc} -m {order} -a {fw} > {base_p_mgc}'
-                .format(vopr=SPTK['VOPR'], order=mgc_dim-1, mgc=mgc_file_in, weight=os.path.join(gen_dir, 'weight'),
-                        mc2b=SPTK['MC2B'],  fw=fw_coef,
-                        bcp=SPTK['BCP'],
-                        merge=SPTK['MERGE'], order2=mgc_dim-2, base_p_b0=mgc_file_in+'_p_b0',
-                        b2mc=SPTK['B2MC'], base_p_mgc=mgc_file_out))
+    # Saving lifter in file:
+    curr_cmd = '{lifter} | {x2x} +af > {weight}'.format(lifter=lifter, x2x=x2x_bin, weight=temp_lifter)
+    call(curr_cmd, shell=True)
+    #--------------------------------------
+    # Saving Base r0:
+    curr_cmd = '{freqt} -m {order} -a {fw} -M {co} -A 0 < {mgc} | {c2acr} -m {co} -M 0 -l {fl} > {base_r0}'.\
+                    format(freqt=freqt_bin, order=ncoeffs-1, fw=alpha, co=minph_ord, mgc=temp_mcep, c2acr=c2acr_bin, fl=fft_len, base_r0=temp_r0)
+    call(curr_cmd, shell=True)
+    #--------------------------------------
+    curr_cmd = '{vopr} -m -n {order} < {mgc} {weight} | {freqt} -m {order} -a {fw} -M {co} -A 0 | {c2acr} -m {co} -M 0 -l {fl} > {base_p_r0}'\
+                                .format(vopr=vopr_bin, order=ncoeffs-1, mgc=temp_mcep, weight=temp_lifter, freqt=freqt_bin, fw=alpha, co=minph_ord,
+                                                                                                    c2acr=c2acr_bin, fl=fft_len, base_p_r0=temp_p_r0)
+    call(curr_cmd, shell=True)
 
-    return
+    #--------------------------------------
+    curr_cmd = '{vopr} -m -n {order} < {mgc} {weight} | {mc2b} -m {order} -a {fw} | {bcp} -n {order} -s 0 -e 0 > {base_b0}'\
+                    .format(vopr=vopr_bin, order=ncoeffs-1, mgc=temp_mcep, weight=temp_lifter, mc2b=mc2b_bin, fw=alpha, bcp=bcp_bin, base_b0=temp_b0)
+    call(curr_cmd, shell=True)
 
-    x2x
-    FREQT
-    C2ACR
-    VOPR
-    MC2B
-    BCP
-    SOPR
-    MERGE
-    B2MC
-'''
+    #--------------------------------------
+    curr_cmd = '{vopr} -d < {base_r0} {base_p_r0} | {sopr} -LN -d 2 | {vopr} -a {base_b0} > {base_p_b0}'\
+                .format(vopr=vopr_bin, base_r0=temp_r0, base_p_r0=temp_p_r0, sopr=sopr_bin, base_b0=temp_b0, base_p_b0=temp_p_b0)
+    call(curr_cmd, shell=True)
+    #--------------------------------------
+
+    curr_cmd = '{vopr} -m -n {order} < {mgc} {weight} | {mc2b} -m {order} -a {fw} | {bcp} -n {order} -s 1 -e {order} | {merge} -n {order2} -s 0 -N 0 {base_p_b0} | {b2mc} -m {order} -a {fw} > {base_p_mgc}'\
+                            .format(vopr=vopr_bin, order=ncoeffs-1, mgc=temp_mcep, weight=temp_lifter, mc2b=mc2b_bin, fw=alpha, bcp=bcp_bin,
+                                                    merge=merge_bin, order2=ncoeffs-2, base_p_b0=temp_p_b0, b2mc=b2mc_bin, base_p_mgc=temp_mcep_pf)
+    call(curr_cmd, shell=True)
+
+    #--------------------------------------
+
+    # Convert to mel_mag_log:
+    m_mcep_pf = lu.read_binfile(temp_mcep_pf, dim=ncoeffs)
+    m_mag_mel_log_pf = la.mcep_to_sp_cosmat(m_mcep_pf, ncoeffs, alpha=0.0, out_type='log')
+
+    # Protection agains possible nans:
+    m_mag_mel_log_pf[np.isnan(m_mag_mel_log_pf)] = la.MAGIC
+
+    # Temp files removal:
+    os.remove(temp_mcep)
+    os.remove(temp_mcep_pf)
+    os.remove(temp_lifter)
+    os.remove(temp_r0)
+    os.remove(temp_p_r0)
+    os.remove(temp_b0)
+    os.remove(temp_p_b0)
+
+
+    return m_mag_mel_log_pf

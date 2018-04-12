@@ -13,6 +13,7 @@ import os
 import glob
 import time
 from multiprocessing import Pool
+import socket
 
 #==============================================================================
 # FUNCTIONS
@@ -182,11 +183,15 @@ def add_rel_path(rel_path):
     dir_to_add  = os.path.realpath(caller_dir + rel_path)
     sys.path.append(dir_to_add)
 
-# Inserts pid to file name. This is useful when using temp files.--------------
-# Example: path/file.wav -> path/file_pid.wav
+#----------------------------------------------------------------------------------
 def ins_pid(filepath):
+    '''
+    Inserts pid plus host name to a file path.
+    It is very useful when naming temp files, since it prevents that temp files from different instances overlap.
+    Example: path/file.wav -> path/file_host_pid.wav
+    '''
     filename, ext = os.path.splitext(filepath)
-    filename = "%s_%d%s" % (filename, os.getpid(), ext)
+    filename = "%s_%s_%d%s" % (filename, socket.gethostname(), os.getpid(), ext)
     return filename
 
 # Inserts date and time to file name. This is useful for output files----------
