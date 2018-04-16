@@ -9,44 +9,14 @@ My personal library for general audio processing.
 import numpy as np
 import os
 from subprocess import call
-#import warnings
 import soundfile as sf
 import libutils as lu
 from scipy import interpolate
 from ConfigParser import SafeConfigParser
 
-
-
-# Configuration:
-#_curr_dir = os.path.dirname(os.path.realpath(__file__))
-#_reaper_bin    = os.path.realpath(_curr_dir + '/../tools/REAPER/build/reaper')
-#_sptk_mcep_bin = os.path.realpath(_curr_dir + '/../tools/SPTK-3.9/build/bin/mcep')
-
 MAGIC = -1.0E+10 # logarithm floor (the same as SPTK)
 
 #-------------------------------------------------------------------------------
-
-'''
-def parse_config():
-    global _reaper_bin, _sptk_mcep_bin
-    _curr_dir = os.path.dirname(os.path.realpath(__file__))
-    #_reaper_bin    = os.path.realpath(_curr_dir + '/../tools/REAPER/build/reaper')
-    #_sptk_mcep_bin = os.path.realpath(_curr_dir + '/../tools/SPTK-3.9/build/bin/mcep')
-    _reaper_bin    = os.path.realpath(_curr_dir + '/../tools/bin/reaper')
-    _sptk_mcep_bin = os.path.realpath(_curr_dir + '/../tools/bin/mcep')
-    _config = SafeConfigParser()
-    _config.read(_curr_dir + '/../config.ini')
-    #import ipdb; ipdb.set_trace()
-    if not ((_config.get('TOOLS', 'reaper')=='') or (_config.get('TOOLS', 'sptk_mcep')=='')):
-        #import ipdb; ipdb.set_trace()
-        _reaper_bin    = _config.get('TOOLS', 'reaper')
-        _sptk_mcep_bin = _config.get('TOOLS', 'sptk_mcep')
-    return
-parse_config()
-'''
-
-
-
 def parse_config():
     global _reaper_bin, _sptk_dir
     _curr_dir = os.path.dirname(os.path.realpath(__file__))
@@ -57,61 +27,13 @@ def parse_config():
     _config = SafeConfigParser()
     _config.read(_curr_dir + '/../config.ini')
 
-    #if not ((_config.get('TOOLS', 'reaper')=='') or (_config.get('TOOLS', 'sptk_mcep')=='')):
     if not (_config.get('TOOLS', 'bin_dir')==''):
         _reaper_bin    = os.path.join(_config.get('TOOLS', 'bin_dir'), 'reaper')
         _sptk_dir      = _config.get('TOOLS', 'bin_dir')
     return
 parse_config()
 
-#------------------------------------------------------------------------------
 
-def true_envelope(m_sp, in_type='abs', ncoeffs=60, thres_db=0.1):
-    '''
-    in_type: 'abs', 'db', or 'log'
-    TODO: Test cases 'db' and 'log'
-    '''
-
-    if in_type=='db':
-        m_sp_db = m_sp
-    elif in_type=='abs':
-        m_sp_db = db(m_sp)
-    elif in_type=='log':
-        m_sp_db = (20.0 / np.log(10.0)) * m_sp
-
-    m_sp_db_env = np.zeros(m_sp_db.shape)
-    nFrms     = m_sp_db.shape[0]
-    n_maxiter = 100
-
-    for f in xrange(nFrms):
-        v_sp_db = m_sp_db[f,:]
-        for i in xrange(n_maxiter):
-            v_sp_db_sm = spectral_smoothing_rceps(v_sp_db[None,:], nc_total=ncoeffs, fade_to_total=0.7)[0]
-
-            # Debug:
-            if False:
-                from libplot import lp
-                lp.figure(1)
-                lp.plot(m_sp_db[f,:], '.-b')
-                lp.plot(v_sp_db, '.-r')
-                lp.plot(v_sp_db_sm, '.-g')
-                lp.grid()
-
-            if np.mean(np.abs(v_sp_db - v_sp_db_sm)) < thres_db:
-                break
-
-            v_sp_db = np.maximum(v_sp_db, v_sp_db_sm)
-
-        m_sp_db_env[f,:] = v_sp_db_sm
-
-    if in_type=='db':
-        m_sp_env = m_sp_db_env
-    elif in_type=='abs':
-        m_sp_env = db(m_sp_db_env, b_inv=True)
-    elif in_type=='log':
-        m_sp_env = (np.log(10.0) / 20.0) * m_sp_db_env
-
-    return m_sp_env
 
 #-------------------------------------------------------------------------------
 def gen_mask_simple(v_voi, nbins, cutoff_bin):
@@ -368,31 +290,54 @@ def interp_unv_regions(m_data, v_voi, voi_cond='>0', interp_type='linear'):
     
     return m_data_intrp
 
-'''
 #------------------------------------------------------------------------------
-# Generates time-domain non-symmetric "flat top" windows
-# Also, it can be used for generating non-symetric windows ("non-flat top")
-# func_win: e.g., numpy.hanning
-# flat_to_len_ratio: flat_length / total_length. Number [0,1]
-def gen_wider_window(func_win,len_l, len_r, flat_to_len_ratio):
-    fade_to_len_ratio = 1 - flat_to_len_ratio  
-    
-    len_l = lu.round_to_int(len_l)
-    len_r = lu.round_to_int(len_r)
-    
-    len_l_fade = lu.round_to_int(fade_to_len_ratio * len_l)     
-    len_r_fade = lu.round_to_int(fade_to_len_ratio * len_r) 
-        
-    v_win_l   = func_win(2 * len_l_fade + 1)
-    v_win_l   = v_win_l[:len_l_fade]
-    v_win_r   = func_win(2 * len_r_fade + 1)
-    v_win_r   = v_win_r[len_r_fade+1:]
-    len_total = len_l + len_r
-    len_flat  = len_total - (len_l_fade + len_r_fade)
-    v_win     = np.hstack(( v_win_l, np.ones(len_flat) , v_win_r ))
-        
-    return v_win
-'''
+
+def true_envelope(m_sp, in_type='abs', ncoeffs=60, thres_db=0.1):
+    '''
+    in_type: 'abs', 'db', or 'log'
+    TODO: Test cases 'db' and 'log'
+    '''
+
+    if in_type=='db':
+        m_sp_db = m_sp
+    elif in_type=='abs':
+        m_sp_db = db(m_sp)
+    elif in_type=='log':
+        m_sp_db = (20.0 / np.log(10.0)) * m_sp
+
+    m_sp_db_env = np.zeros(m_sp_db.shape)
+    nFrms     = m_sp_db.shape[0]
+    n_maxiter = 100
+
+    for f in xrange(nFrms):
+        v_sp_db = m_sp_db[f,:]
+        for i in xrange(n_maxiter):
+            v_sp_db_sm = spectral_smoothing_rceps(v_sp_db[None,:], nc_total=ncoeffs, fade_to_total=0.7)[0]
+
+            # Debug:
+            if False:
+                from libplot import lp
+                lp.figure(1)
+                lp.plot(m_sp_db[f,:], '.-b')
+                lp.plot(v_sp_db, '.-r')
+                lp.plot(v_sp_db_sm, '.-g')
+                lp.grid()
+
+            if np.mean(np.abs(v_sp_db - v_sp_db_sm)) < thres_db:
+                break
+
+            v_sp_db = np.maximum(v_sp_db, v_sp_db_sm)
+
+        m_sp_db_env[f,:] = v_sp_db_sm
+
+    if in_type=='db':
+        m_sp_env = m_sp_db_env
+    elif in_type=='abs':
+        m_sp_env = db(m_sp_db_env, b_inv=True)
+    elif in_type=='log':
+        m_sp_env = (np.log(10.0) / 20.0) * m_sp_db_env
+
+    return m_sp_env
 
 # Read audio file:-------------------------------------------------------------
 def read_audio_file(filepath, **kargs):
@@ -419,79 +364,6 @@ def write_audio_file(filepath, v_signal, fs, norm=0.98):
     
     return
 
-# def write_audio_file(filepath, v_signal, fs, **kargs):
-
-#     # Parsing input:
-#     if 'norm' in kargs:
-#         if kargs['norm'] == False:
-#             pass
-
-#         elif kargs['norm'] == 'max':
-#             v_signal = v_signal / np.max(np.abs(v_signal))
-
-#         del(kargs['norm'])
-#     else:
-#         v_signal = v_signal / np.max(np.abs(v_signal)) # default
-
-#     # Write:
-#     sf.write(filepath, v_signal, fs, **kargs)
-
-#     return
-
-
-'''
-# 1-D Smoothing by convolution: (from ScyPy Cookbook - not checked yet!)-----------------------------
-def smooth_by_conv(x,window_len=11,window='hanning'):
-    """smooth the data using a window with requested size.
-    
-    This method is based on the convolution of a scaled window with the signal.
-    The signal is prepared by introducing reflected copies of the signal 
-    (with the window size) in both ends so that transient parts are minimized
-    in the begining and end part of the output signal.
-    
-    input:
-        x: the input signal 
-        window_len: the dimension of the smoothing window; should be an odd integer
-        window: the type of window from 'flat', 'hanning', 'hamming', 'bartlett', 'blackman'
-            flat window will produce a moving average smoothing.
-    output:
-        the smoothed signal
-        
-    example:
-    t=linspace(-2,2,0.1)
-    x=sin(t)+randn(len(t))*0.1
-    y=smooth(x)
-    
-    see also: 
-    
-    numpy.hanning, numpy.hamming, numpy.bartlett, numpy.blackman, numpy.convolve
-    scipy.signal.lfilter
-    TODO: the window parameter could be the window itself if an array instead of a string
-    NOTE: length(output) != length(input), to correct this: return y[(window_len/2-1):-(window_len/2)] instead of just y.
-    """ 
-     
-    if x.ndim != 1:
-        raise ValueError, "smooth only accepts 1 dimension arrays."
-    if x.size < window_len:
-        raise ValueError, "Input vector needs to be bigger than window size."
-        
-    if window_len<3:
-        return x
-    
-    
-    if not window in ['flat', 'hanning', 'hamming', 'bartlett', 'blackman']:
-        raise ValueError, "Window is on of 'flat', 'hanning', 'hamming', 'bartlett', 'blackman'"
-    
-    s=np.r_[x[window_len-1:0:-1],x,x[-1:-window_len:-1]]
-    #print(len(s))
-    if window == 'flat': #moving average
-        w=np.ones(window_len,'d')
-    else:
-        w=eval('np.'+window+'(window_len)')
-    
-    y=np.convolve(w/w.sum(),s,mode='valid')
-    return y 
-'''
 #------------------------------------------------------------------------------
 # data_type: 'magnitude', 'phase' or 'zeros' (for zero padding), 'complex'
 def add_hermitian_half(m_data, data_type='mag'):
@@ -723,32 +595,6 @@ def sp_to_mcep(m_sp, n_coeffs=60, alpha=0.77, in_type=3, fft_len=0):
     
     return m_mgc
 
-'''
-# MCEP to SP using SPTK toolkit.-----------------------------------------------
-# m_sp is absolute and non redundant spectrum
-# out_type = type of output spectrum. If out_type==0 -> 20*log|H(z)|. If out_type==2 -> |H(z)| . If out_type==1 -> ln|H(z)|
-def mcep_to_sp_sptk(m_mgc, nFFT, alpha=0.77, out_type=2): 
-  
-    n_coeffs = m_mgc.shape[1]    
-
-    temp_mgc =  ins_pid('temp.mgc') 
-    temp_sp  =  ins_pid('temp.sp')
-    
-    lu.write_binfile(m_mgc,temp_mgc)
-
-    # MGC to Spec:
-    curr_cmd = _curr_dir + "/SPTK-3.7/bin/mgc2sp -a %1.2f -g 0 -m %d -l %d -o %d %s > %s" % (alpha, n_coeffs-1, nFFT, out_type, temp_mgc, temp_sp)
-    call(curr_cmd, shell=True) 
-
-    m_sp = lu.read_binfile(temp_sp, dim=1+nFFT/2)
-    if np.size(m_sp,0) == 1: # protection when it is only one frame
-        m_sp = m_sp[0]
-    
-    os.remove(temp_mgc)
-    os.remove(temp_sp)
-   
-    return m_sp
-'''
 #============================================================================== 
 # out_type: 'db', 'log', 'abs' (absolute)    
 def mcep_to_sp_cosmat(m_mcep, n_spbins, alpha=0.77, out_type='abs'):
@@ -857,45 +703,6 @@ def convert_label_state_align_to_var_frame_rate(in_lab_st_file, v_dur_state, out
     return
 
 
-
-'''
-def sp_mel_warp_fbank(m_mag, n_melbands, alpha=0.77):
-
-    nfrms, nbins = m_mag.shape
-
-    # Bins warping:
-    v_bins  = np.linspace(0, np.pi, num=nbins)
-    v_bins_warp = np.arctan(  (1-alpha**2) * np.sin(v_bins) / ((1+alpha**2)*np.cos(v_bins) - 2*alpha) )
-    v_bins_warp[v_bins_warp < 0] += np.pi
-
-    # Bands gen:
-    maxval = v_bins_warp[-1]
-    v_cntrs_mel   = np.linspace(0, maxval, n_melbands)
-    v_middles_mel = v_cntrs_mel + 0.5*(v_cntrs_mel[1] - v_cntrs_mel[0])
-    v_middles_mel = v_middles_mel[:-1]
-
-    # To linear frequency:
-    f_interp  = interpolate.interp1d(v_bins_warp, np.arange(nbins), kind='quadratic')
-    v_cntrs   = lu.round_to_int(f_interp(v_cntrs_mel))
-    v_middles = lu.round_to_int(f_interp(v_middles_mel))
-
-    # Compress:
-    m_mag_mel_log = np.zeros((nfrms, n_melbands))
-    v_middles_ext = np.r_[0, v_middles, v_cntrs[-1]]
-
-    m_mag_log = log(m_mag)
-    for nxf in xrange(nfrms):
-        #print(nxf)
-        v_curr_mag_log = m_mag_log[nxf,:]
-        for nxb in xrange(n_melbands):
-            #print(nxb)
-            m_mag_mel_log[nxf,nxb] = np.mean(v_curr_mag_log[v_middles_ext[nxb]:v_middles_ext[nxb+1]])
-
-    m_mag_mel = np.exp(m_mag_mel_log)
-
-    return m_mag_mel
-'''
-
 def build_mel_curve(alpha, nbins, amp=np.pi):
     v_bins  = np.linspace(0, np.pi, nbins)
     v_bins_warp = np.arctan(  (1-alpha**2) * np.sin(v_bins) / ((1+alpha**2)*np.cos(v_bins) - 2*alpha) )
@@ -905,19 +712,6 @@ def build_mel_curve(alpha, nbins, amp=np.pi):
 
     return v_bins_warp
 
-'''
-def build_fbank(nbins, nbands):
-    m_fbank = np.zeros((nbins, nbands))
-    v_cntrs_ext = np.r_[v_cntrs[0], v_cntrs, v_cntrs[-1]]
-    v_winlen = np.zeros(nbands)
-    for nxb in xrange(1, nbands+1):
-        winlen_l = v_cntrs_ext[nxb]   - v_cntrs_ext[nxb-1]
-        winlen_r = v_cntrs_ext[nxb+1] - v_cntrs_ext[nxb]
-        v_win    = gen_non_symmetric_win(winlen_l, winlen_r, win_func=win_func, b_norm=True)
-        winlen   = v_win.size
-        v_winlen[nxb-1] = winlen
-        m_fbank[v_cntrs_ext[nxb-1]:(v_cntrs_ext[nxb-1]+winlen),nxb-1] = v_win
-'''
 
 def apply_fbank(m_mag, v_bins_warp, nbands, win_func=np.hanning, mode='average'):
     '''
@@ -958,26 +752,6 @@ def apply_fbank(m_mag, v_bins_warp, nbands, win_func=np.hanning, mode='average')
             m_filtered = v_mag[:,None] * m_fbank
             v_nx_max   = np.argmax(np.abs(m_filtered), axis=0)
             m_mag_mel[nxf,:]  = v_mag[v_nx_max]
-
-            #for nxb in xrange():
-
-    #---------------------------------------------------------
-    ''' # OLD simple average filter bank.
-    # Compress:
-    m_mag_mel = np.zeros((nfrms, nbands))
-
-    v_middles_mel = v_cntrs_mel + 0.5*(v_cntrs_mel[1] - v_cntrs_mel[0])
-    v_middles_mel = v_middles_mel[:-1]
-    v_middles = lu.round_to_int(f_interp(v_middles_mel))
-    v_middles_ext = np.r_[0, v_middles, v_cntrs[-1]]
-
-
-    for nxf in xrange(nfrms):
-        v_curr_mag = m_mag[nxf,:]
-        for nxb in xrange(nbands):
-            m_mag_mel[nxf,nxb] = np.mean(v_curr_mag[v_middles_ext[nxb]:v_middles_ext[nxb+1]])
-    '''
-
 
     return m_mag_mel, v_winlen
 
@@ -1153,62 +927,4 @@ def build_min_phase_from_mag_spec(m_mag):
     m_mag_cmplx_min_ph = np.exp(m_mag_cmplx_min_ph)
 
     return m_mag_cmplx_min_ph
-
-
-'''
-# Ferom: https://github.com/librosa/librosa/issues/434 (Check license)
-def griffinlim(spectrogram, n_iter = 100, window = 'hann', n_fft = 2048, hop_length = -1, verbose = False):
-    if hop_length == -1:
-        hop_length = n_fft // 4
-
-    angles = np.exp(2j * np.pi * np.random.rand(*spectrogram.shape))
-
-    t = tqdm(range(n_iter), ncols=100, mininterval=2.0, disable=not verbose)
-    for i in t:
-        full = np.abs(spectrogram).astype(np.complex) * angles
-        inverse = librosa.istft(full, hop_length = hop_length, window = window)
-        rebuilt = librosa.stft(inverse, n_fft = n_fft, hop_length = hop_length, window = window)
-        angles = np.exp(1j * np.angle(rebuilt))
-
-        if verbose:
-            diff = np.abs(spectrogram) - np.abs(rebuilt)
-            t.set_postfix(loss=np.linalg.norm(diff, 'fro'))
-
-    full = np.abs(spectrogram).astype(np.complex) * angles
-    inverse = librosa.istft(full, hop_length = hop_length, window = window)
-
-    return inverse
-'''
-
-# From: https://github.com/candlewill/Griffin_lim/blob/master/utils/audio.py (Check license)
-'''
-import librosa
-def griffin_lim(S, fs, fft_len, niters=100):
-
-    frame_shift_ms  = 25
-    frame_length_ms = 50
-
-    def _stft(y):
-        #n_fft = (num_freq - 1) * 2
-        hop_length = int(frame_shift_ms / 1000 * fs)
-        win_length = int(frame_length_ms / 1000 * fs)
-        return librosa.stft(y=y, n_fft=fft_len, hop_length=hop_length, win_length=win_length)
-
-
-    def _istft(y):
-        hop_length = int(frame_shift_ms / 1000 * fs)
-        win_length = int(frame_length_ms / 1000 * fs)
-        return librosa.istft(y, hop_length=hop_length, win_length=win_length)
-
-    angles = np.exp(2j * np.pi * np.random.rand(*S.shape))
-    S_complex = np.abs(S).astype(np.complex)
-    for i in range(niters):
-        if i > 0:
-            angles = np.exp(1j * np.angle(_stft(y)))
-        y = _istft(S_complex * angles)
-    return y
-'''
-
-
-
 
