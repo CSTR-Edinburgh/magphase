@@ -148,7 +148,7 @@ def mkdir(l_dir):
     l_dir could be a directory or a list of directories.
     '''
     # To list:
-    if type(l_dir)==str:
+    if type(l_dir)==str or type(l_dir)==unicode:
         l_dir = [l_dir]
 
     for directory in l_dir:

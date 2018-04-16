@@ -3330,7 +3330,7 @@ def analysis_compressed_type1_with_phase_comp_mcep(wav_file, fft_len=None, out_d
     fft_len = 2*(np.size(m_mag,1) - 1)
 
     # Save features:
-    if type(out_dir) is str:
+    if type(out_dir)==str or type(out_dir)==unicode:
         file_id = os.path.basename(wav_file).split(".")[0]
         write_featfile(m_mag_mel_log, out_dir, file_id + '.mag')
         write_featfile(m_real_mel   , out_dir, file_id + '.real')
@@ -3571,6 +3571,9 @@ def synthesis_from_acoustic_modelling_dev(in_feats_dir, filename_token, out_syn_
     elif pf_type=='merlin':
         print('Using Merlin postfilter...')
         m_mag_mel_log = post_filter_merlin(m_mag_mel_log, fs)
+
+    elif pf_type=='no':
+        print('Not using postfilter...')
 
         # Debug:
         if False:
