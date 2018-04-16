@@ -31,11 +31,12 @@ if __name__ == '__main__':
     fs = 48000
 
     # INPUT:==============================================================================
-    files_scp      = '../data_48k/file_id.scp'   # List of file names (tokens). Format used by Merlin.
-    in_lab_st_dir  = '../data_48k/labs'          # Original state aligned label files directory (in the format used by Merlin).
-    in_shift_dir   = '../data_48k/params'        # Directory containing .shift files (You need to run feature extraction before running this script.)
-    out_lab_st_dir = '../data_48k/labs_var_rate' # Directory that will contain the converted "variable frame rate" state aligned label files.
+    files_scp      = '/afs/inf.ed.ac.uk/group/cstr/projects/Felipe_Espic/Projects/DirectFFTWaveModelling/magphase_proj/merlin/egs/nick/nick_magphase_type1_var_rate/file_id_list_fixed.scp'   # List of file names (tokens). Format used by Merlin.
+    in_lab_st_dir  = '/afs/inf.ed.ac.uk/group/cstr/projects/Felipe_Espic/Projects/DirectFFTWaveModelling/magphase_proj/merlin/egs/nick/nick_magphase_type1_var_rate/data/label_state_align'          # Original state aligned label files directory (in the format used by Merlin).
+    in_shift_dir   = '/afs/inf.ed.ac.uk/group/cstr/projects/Felipe_Espic/Projects/DirectFFTWaveModelling/magphase_proj/merlin/egs/nick/nick_magphase_type1_var_rate/data/acoustic_feats'        # Directory containing .shift files (You need to run feature extraction before running this script.)
+    out_lab_st_dir = '/afs/inf.ed.ac.uk/group/cstr/projects/Felipe_Espic/Projects/DirectFFTWaveModelling/magphase_proj/merlin/egs/nick/nick_magphase_type1_var_rate/data/label_state_align_var_rate' # Directory that will contain the converted "variable frame rate" state aligned label files.
     b_prevent_zeros = False                  # True if you want to ensure that all the phonemes have one frame at least. (not recommended, only usful when there are too many utterances crashed)
+
 
 
     # PROCESSING:=========================================================================

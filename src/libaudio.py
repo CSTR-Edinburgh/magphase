@@ -15,6 +15,8 @@ import libutils as lu
 from scipy import interpolate
 from ConfigParser import SafeConfigParser
 
+
+
 # Configuration:
 #_curr_dir = os.path.dirname(os.path.realpath(__file__))
 #_reaper_bin    = os.path.realpath(_curr_dir + '/../tools/REAPER/build/reaper')
@@ -23,6 +25,8 @@ from ConfigParser import SafeConfigParser
 MAGIC = -1.0E+10 # logarithm floor (the same as SPTK)
 
 #-------------------------------------------------------------------------------
+
+'''
 def parse_config():
     global _reaper_bin, _sptk_mcep_bin
     _curr_dir = os.path.dirname(os.path.realpath(__file__))
@@ -39,7 +43,26 @@ def parse_config():
         _sptk_mcep_bin = _config.get('TOOLS', 'sptk_mcep')
     return
 parse_config()
+'''
 
+
+
+def parse_config():
+    global _reaper_bin, _sptk_dir
+    _curr_dir = os.path.dirname(os.path.realpath(__file__))
+
+    _reaper_bin = os.path.realpath(_curr_dir + '/../tools/bin/reaper')
+    _sptk_dir   = os.path.realpath(_curr_dir + '/../tools/bin')
+
+    _config = SafeConfigParser()
+    _config.read(_curr_dir + '/../config.ini')
+
+    #if not ((_config.get('TOOLS', 'reaper')=='') or (_config.get('TOOLS', 'sptk_mcep')=='')):
+    if not (_config.get('TOOLS', 'bin_dir')==''):
+        _reaper_bin    = os.path.join(_config.get('TOOLS', 'bin_dir'), 'reaper')
+        _sptk_dir      = _config.get('TOOLS', 'bin_dir')
+    return
+parse_config()
 
 #------------------------------------------------------------------------------
 
@@ -122,7 +145,7 @@ def pm_to_shift(v_pm):
     return v_shift
 
 #------------------------------------------------------------------------------
-def gen_non_symmetric_win(left_len, right_len, win_func):
+def gen_non_symmetric_win(left_len, right_len, win_func, b_norm=False):
     # Left window:
     v_left_win = win_func(1+2*left_len)
     v_left_win = v_left_win[0:(left_len+1)]
@@ -132,7 +155,11 @@ def gen_non_symmetric_win(left_len, right_len, win_func):
     v_right_win = np.flipud(v_right_win[0:(right_len+1)])
     
     # Constructing window:
-    return np.hstack((v_left_win, v_right_win[1:]))    
+    v_win = np.hstack((v_left_win, v_right_win[1:]))
+    if b_norm:
+        v_win = v_win / np.sum(v_win)
+
+    return v_win
     
 #------------------------------------------------------------------------------
 # generated centered assymetric window:
@@ -175,6 +202,10 @@ def frm_list_to_matrix(l_frames, v_shift, nFFT):
     nfrms    = len(v_shift)
     m_frm    = np.zeros((nfrms, nFFT))
     for i in xrange(nfrms):
+
+        # Debug:
+        #print(i)
+
         rel_shift  = nFFThalf - v_shift[i] - 1
         m_frm[i,:] = frame_shift(l_frames[i], rel_shift, nFFT)  
     
@@ -204,17 +235,20 @@ def bin_to_hz(v_bin, nFFT, fs):
 #------------------------------------------------------------------------------
 # m_sp_l: spectrum on the left. m_sp_r: spectrum on the right
 # TODO: Processing fo other freq scales, such as Mel.
-def spectral_crossfade(m_sp_l, m_sp_r, cut_off, bw, fs, freq_scale='hz'):
+def spectral_crossfade(m_sp_l, m_sp_r, cut_off, bw, fs, freq_scale='hz', win_func=np.hanning):
+    '''
+    m_sp_l and m_sp_r could be float or complex.
+    '''
 
     # Hz to bin:
     nFFThalf = m_sp_l.shape[1]
     nFFT     = (nFFThalf - 1) * 2    
-    bin_l    = lu.round_to_int(hz_to_bin(cut_off - bw/2, nFFT, fs))     
-    bin_r    = lu.round_to_int(hz_to_bin(cut_off + bw/2, nFFT, fs))
+    bin_l    = lu.round_to_int(hz_to_bin(cut_off - bw/2.0, nFFT, fs))
+    bin_r    = lu.round_to_int(hz_to_bin(cut_off + bw/2.0, nFFT, fs))
 
     # Gen short windows:
     bw_bin       = bin_r - bin_l
-    v_win_shrt   = np.hanning(2*bw_bin + 1)
+    v_win_shrt   = win_func(2*bw_bin + 1)
     v_win_shrt_l = v_win_shrt[bw_bin:]
     v_win_shrt_r = v_win_shrt[:bw_bin+1]
     
@@ -673,8 +707,9 @@ def sp_to_mcep(m_sp, n_coeffs=60, alpha=0.77, in_type=3, fft_len=0):
     if fft_len is 0: # case fft automatic
         fft_len = 2*(np.size(m_sp,1) - 1)
 
-    # MCEP:      
-    curr_cmd = _sptk_mcep_bin + " -a %1.2f -m %d -l %d -e 1.0E-8 -j 0 -f 0.0 -q %d %s > %s" % (alpha, n_coeffs-1, fft_len, in_type, temp_sp, temp_mgc)
+    # MCEP:
+    sptk_mcep_bin = os.path.join(_sptk_dir, 'mcep')
+    curr_cmd = sptk_mcep_bin + " -a %1.2f -m %d -l %d -e 1.0E-8 -j 0 -f 0.0 -q %d %s > %s" % (alpha, n_coeffs-1, fft_len, in_type, temp_sp, temp_mgc)
     call(curr_cmd, shell=True)
     
     # Read MGC File:
@@ -820,5 +855,360 @@ def convert_label_state_align_to_var_frame_rate(in_lab_st_file, v_dur_state, out
     # Save file:
     np.savetxt(out_lab_st_file, mstr_out_labs_st,  fmt='%s')
     return
+
+
+
+'''
+def sp_mel_warp_fbank(m_mag, n_melbands, alpha=0.77):
+
+    nfrms, nbins = m_mag.shape
+
+    # Bins warping:
+    v_bins  = np.linspace(0, np.pi, num=nbins)
+    v_bins_warp = np.arctan(  (1-alpha**2) * np.sin(v_bins) / ((1+alpha**2)*np.cos(v_bins) - 2*alpha) )
+    v_bins_warp[v_bins_warp < 0] += np.pi
+
+    # Bands gen:
+    maxval = v_bins_warp[-1]
+    v_cntrs_mel   = np.linspace(0, maxval, n_melbands)
+    v_middles_mel = v_cntrs_mel + 0.5*(v_cntrs_mel[1] - v_cntrs_mel[0])
+    v_middles_mel = v_middles_mel[:-1]
+
+    # To linear frequency:
+    f_interp  = interpolate.interp1d(v_bins_warp, np.arange(nbins), kind='quadratic')
+    v_cntrs   = lu.round_to_int(f_interp(v_cntrs_mel))
+    v_middles = lu.round_to_int(f_interp(v_middles_mel))
+
+    # Compress:
+    m_mag_mel_log = np.zeros((nfrms, n_melbands))
+    v_middles_ext = np.r_[0, v_middles, v_cntrs[-1]]
+
+    m_mag_log = log(m_mag)
+    for nxf in xrange(nfrms):
+        #print(nxf)
+        v_curr_mag_log = m_mag_log[nxf,:]
+        for nxb in xrange(n_melbands):
+            #print(nxb)
+            m_mag_mel_log[nxf,nxb] = np.mean(v_curr_mag_log[v_middles_ext[nxb]:v_middles_ext[nxb+1]])
+
+    m_mag_mel = np.exp(m_mag_mel_log)
+
+    return m_mag_mel
+'''
+
+def build_mel_curve(alpha, nbins, amp=np.pi):
+    v_bins  = np.linspace(0, np.pi, nbins)
+    v_bins_warp = np.arctan(  (1-alpha**2) * np.sin(v_bins) / ((1+alpha**2)*np.cos(v_bins) - 2*alpha) )
+    v_bins_warp[v_bins_warp < 0] += np.pi
+
+    v_bins_warp = v_bins_warp * (amp/np.pi)
+
+    return v_bins_warp
+
+'''
+def build_fbank(nbins, nbands):
+    m_fbank = np.zeros((nbins, nbands))
+    v_cntrs_ext = np.r_[v_cntrs[0], v_cntrs, v_cntrs[-1]]
+    v_winlen = np.zeros(nbands)
+    for nxb in xrange(1, nbands+1):
+        winlen_l = v_cntrs_ext[nxb]   - v_cntrs_ext[nxb-1]
+        winlen_r = v_cntrs_ext[nxb+1] - v_cntrs_ext[nxb]
+        v_win    = gen_non_symmetric_win(winlen_l, winlen_r, win_func=win_func, b_norm=True)
+        winlen   = v_win.size
+        v_winlen[nxb-1] = winlen
+        m_fbank[v_cntrs_ext[nxb-1]:(v_cntrs_ext[nxb-1]+winlen),nxb-1] = v_win
+'''
+
+def apply_fbank(m_mag, v_bins_warp, nbands, win_func=np.hanning, mode='average'):
+    '''
+    Applies an average filter bank.
+    nbands: number of output bands.
+    v_bins_warp: Mapping from input bins to output (monotonically crescent from 0 to any positive number).
+                 Requirement: length = m_mag.shape[1]. If wanted, use build_mel_curve(...) to construct it.
+    '''
+    nfrms, nbins = m_mag.shape
+
+    # Bands gen:
+    maxval = v_bins_warp[-1]
+    v_cntrs_mel = np.linspace(0, maxval, nbands)
+
+    # To linear frequency:
+    f_interp = interpolate.interp1d(v_bins_warp, np.arange(nbins), kind='quadratic')
+    v_cntrs  = lu.round_to_int(f_interp(v_cntrs_mel))
+
+    # Build filter bank:
+    m_fbank = np.zeros((nbins, nbands))
+    v_cntrs_ext = np.r_[v_cntrs[0], v_cntrs, v_cntrs[-1]]
+    v_winlen = np.zeros(nbands)
+    for nxb in xrange(1, nbands+1):
+        winlen_l = v_cntrs_ext[nxb]   - v_cntrs_ext[nxb-1]
+        winlen_r = v_cntrs_ext[nxb+1] - v_cntrs_ext[nxb]
+        v_win    = gen_non_symmetric_win(winlen_l, winlen_r, win_func=win_func, b_norm=True)
+        winlen   = v_win.size
+        v_winlen[nxb-1] = winlen
+        m_fbank[v_cntrs_ext[nxb-1]:(v_cntrs_ext[nxb-1]+winlen),nxb-1] = v_win
+
+    # Apply filterbank:
+    if mode=='average':
+        m_mag_mel = np.dot(m_mag, m_fbank)
+    elif mode=='maxabs':
+        m_mag_mel = np.zeros((nfrms, nbands))
+        for nxf in xrange(nfrms):
+            v_mag = m_mag[nxf,:]
+            m_filtered = v_mag[:,None] * m_fbank
+            v_nx_max   = np.argmax(np.abs(m_filtered), axis=0)
+            m_mag_mel[nxf,:]  = v_mag[v_nx_max]
+
+            #for nxb in xrange():
+
+    #---------------------------------------------------------
+    ''' # OLD simple average filter bank.
+    # Compress:
+    m_mag_mel = np.zeros((nfrms, nbands))
+
+    v_middles_mel = v_cntrs_mel + 0.5*(v_cntrs_mel[1] - v_cntrs_mel[0])
+    v_middles_mel = v_middles_mel[:-1]
+    v_middles = lu.round_to_int(f_interp(v_middles_mel))
+    v_middles_ext = np.r_[0, v_middles, v_cntrs[-1]]
+
+
+    for nxf in xrange(nfrms):
+        v_curr_mag = m_mag[nxf,:]
+        for nxb in xrange(nbands):
+            m_mag_mel[nxf,nxb] = np.mean(v_curr_mag[v_middles_ext[nxb]:v_middles_ext[nxb+1]])
+    '''
+
+
+    return m_mag_mel, v_winlen
+
+def sp_mel_warp_fbank(m_mag, n_melbands, alpha=0.77):
+
+    nfrms, nbins = m_mag.shape
+    v_bins_warp  = build_mel_curve(alpha, nbins)
+    m_mag_mel = np.exp(apply_fbank(log(m_mag), v_bins_warp, n_melbands)[0])
+
+    return m_mag_mel
+
+def sp_mel_warp_fbank_2d(m_mag, n_melbands, alpha=0.77):
+    '''
+    It didn't work as expected.
+    '''
+
+    nfrms, nbins  = m_mag.shape
+    v_bins_warp   = build_mel_curve(alpha, nbins)
+    m_mag_mel_log, v_winlen = apply_fbank(log(m_mag), v_bins_warp, n_melbands)
+
+    # Fixing boundaries in window lengths:
+    #v_winlen[0] = v_winlen[1]
+    #v_winlen[-1] = v_winlen[-2]
+
+
+    #max_span = 5
+    #v_td_span = (v_winlen - v_winlen[0])
+    #v_td_span = (max_span - 1.0) * v_td_span / v_td_span[-1] + 1
+
+    '''
+    v_winlen_norm = v_winlen / nbins
+    td_factor = 20
+    v_td_span = td_factor * v_winlen_norm
+    v_td_span = 2 * np.ceil(v_td_span / 2.0) - 1 # Ensuring odd numbers.
+    v_td_span = np.maximum(v_td_span, 1.0)
+    v_td_span = v_td_span.astype(int)
+    '''
+    max_span = 5
+    v_td_span = 1 + build_mel_curve(-0.3, n_melbands, amp=(max_span - 1.0))
+    v_td_span = (2 * np.ceil(v_td_span / 2.0) - 1).astype(int) # Ensuring odd numbers.
+
+
+    m_mag_mel_log_2d = np.zeros(m_mag_mel_log.shape)
+    for nxb in xrange(v_td_span.size):
+        m_mag_mel_log_2d[:,nxb] = smooth_by_conv(m_mag_mel_log[:,nxb], v_win=np.hanning(v_td_span[nxb] + 2))
+
+
+    if False:
+        plm(m_mag_mel_log[:,:])
+        plm(m_mag_mel_log_2d[:,:])
+
+        pl(v_td_span)
+
+    return np.exp(m_mag_mel_log_2d)
+
+def sp_mel_unwarp_fbank(m_mag_mel, nbins, alpha=0.77):
+
+    #nfrms, n_melbands = m_mag_mel.shape
+
+    # All of this to compute v_cntrs. It could be coded much more efficiently.----------------------
+    # Bins warping:
+    #v_bins  = np.linspace(0, np.pi, num=nbins)
+    #v_bins_warp = np.arctan(  (1-alpha**2) * np.sin(v_bins) / ((1+alpha**2)*np.cos(v_bins) - 2*alpha) )
+    #v_bins_warp[v_bins_warp < 0] += np.pi
+    v_bins_warp = build_mel_curve(alpha, nbins, amp=np.pi)
+    m_mag = unwarp_from_fbank(m_mag_mel, v_bins_warp)
+
+    '''
+    # Bands gen:
+    maxval = v_bins_warp[-1]
+    v_cntrs_mel = np.linspace(0, maxval, n_melbands)
+
+    # To linear frequency:
+    f_interp  = interpolate.interp1d(v_bins_warp, np.arange(nbins), kind='quadratic')
+    v_cntrs   = lu.round_to_int(f_interp(v_cntrs_mel))
+    #--------------------------------------------------------------------------------------------------
+
+    v_bins = np.arange(nbins)
+    m_mag = np.zeros((nfrms, nbins))
+    for nxf in xrange(nfrms):
+        f_interp = interpolate.interp1d(v_cntrs, m_mag_mel[nxf,:], kind='quadratic')
+        #f_interp = interpolate.interp1d(v_cntrs, m_mag_mel[nxf,:], kind='linear')
+        m_mag[nxf,:] = f_interp(v_bins)
+    '''
+
+    return m_mag
+
+
+def unwarp_from_fbank(m_mag_mel, v_bins_warp, interp_kind='quadratic'):
+    '''
+    n_bins: number of frequency bins (i.e., Hz).
+    v_bins_warp: Mapping from input bins to output (monotonically crescent from 0 to any positive number).
+                 Requirement: length = m_mag.shape[1]. If wanted, use build_mel_curve(...) to construct it.
+    '''
+
+    nfrms, n_melbands = m_mag_mel.shape
+    n_bins = v_bins_warp.size
+
+    # Bands gen:
+    maxval = v_bins_warp[-1]
+    v_cntrs_mel = np.linspace(0, maxval, n_melbands)
+
+    # To linear frequency:
+    f_interp  = interpolate.interp1d(v_bins_warp, np.arange(n_bins), kind=interp_kind)
+    v_cntrs   = lu.round_to_int(f_interp(v_cntrs_mel))
+
+    # Process per frame:
+    v_bins = np.arange(n_bins)
+    m_mag = np.zeros((nfrms, n_bins))
+    for nxf in xrange(nfrms):
+        f_interp = interpolate.interp1d(v_cntrs, m_mag_mel[nxf,:], kind=interp_kind)
+        #f_interp = interpolate.interp1d(v_cntrs, m_mag_mel[nxf,:], kind='linear')
+        m_mag[nxf,:] = f_interp(v_bins)
+
+    return m_mag
+
+#-------------------------------------------------------------------------------------------------------
+# 2-D Smoothing by convolution: (from ScyPy Cookbook - not checked yet!)-----------------------------
+def smooth_by_conv(m_data, v_win=np.hanning(11)):
+    '''
+    Smooths along m_data columns. If m_data is 1d, it smooths along the other dimension.
+    Length of v_win should be odd.
+    '''
+
+    def smooth_by_conv_1d(v_data, v_win=np.hanning(11)):
+        """smooth the data using a window with requested size.
+
+        TODO: the window parameter could be the window itself if an array instead of a string
+        NOTE: length(output) != length(input), to correct this: return y[(win_len/2-1):-(win_len/2)] instead of just y.
+        """
+        win_len = v_win.size
+        if v_data.ndim != 1:
+            raise ValueError, "smooth only accepts 1 dimension arrays."
+        if v_data.size < win_len:
+            raise ValueError, "Input vector needs to be bigger than window size."
+
+        if win_len<3:
+            return v_data
+
+        half_win_len = (win_len-1)/2
+        v_data_ext   = np.r_[ v_data[0]+np.zeros(half_win_len), v_data, v_data[-1]+np.zeros(half_win_len)]
+
+        v_data_smth = np.convolve(v_win/v_win.sum(), v_data_ext, mode='valid')
+
+        #v_data_smth2 = v_data_smth[half_win_len:-half_win_len]
+        #s=np.r_[v_data[win_len-1:0:-1],v_data,v_data[-1:-win_len:-1]]
+
+        #y=np.convolve(v_win/v_win.sum(),s,mode='valid')
+        return v_data_smth
+
+    if m_data.ndim==1:
+        return smooth_by_conv_1d(m_data, v_win=v_win)
+
+    m_data_smth = np.zeros((m_data.shape))
+    ncols = m_data.shape[1]
+    for nxc in xrange(ncols):
+        m_data_smth[:,nxc] = smooth_by_conv_1d(m_data[:,nxc], v_win=v_win)
+
+    return m_data_smth
+
+def build_min_phase_from_mag_spec(m_mag):
+
+    fft_len_half = m_mag.shape[1]
+    m_mag_log = log(m_mag)
+    m_mag_log = add_hermitian_half(m_mag_log)
+    m_ceps    = np.fft.ifft(m_mag_log).real
+
+    m_ceps_min_ph = m_ceps
+    m_ceps_min_ph[:,fft_len_half:] = 0.0
+    m_ceps_min_ph[:,1:(fft_len_half-1)] *= 2.0
+    m_mag_cmplx_min_ph = np.fft.fft(m_ceps_min_ph)
+    m_mag_cmplx_min_ph = remove_hermitian_half(m_mag_cmplx_min_ph)
+    m_mag_cmplx_min_ph = np.exp(m_mag_cmplx_min_ph)
+
+    return m_mag_cmplx_min_ph
+
+
+'''
+# Ferom: https://github.com/librosa/librosa/issues/434 (Check license)
+def griffinlim(spectrogram, n_iter = 100, window = 'hann', n_fft = 2048, hop_length = -1, verbose = False):
+    if hop_length == -1:
+        hop_length = n_fft // 4
+
+    angles = np.exp(2j * np.pi * np.random.rand(*spectrogram.shape))
+
+    t = tqdm(range(n_iter), ncols=100, mininterval=2.0, disable=not verbose)
+    for i in t:
+        full = np.abs(spectrogram).astype(np.complex) * angles
+        inverse = librosa.istft(full, hop_length = hop_length, window = window)
+        rebuilt = librosa.stft(inverse, n_fft = n_fft, hop_length = hop_length, window = window)
+        angles = np.exp(1j * np.angle(rebuilt))
+
+        if verbose:
+            diff = np.abs(spectrogram) - np.abs(rebuilt)
+            t.set_postfix(loss=np.linalg.norm(diff, 'fro'))
+
+    full = np.abs(spectrogram).astype(np.complex) * angles
+    inverse = librosa.istft(full, hop_length = hop_length, window = window)
+
+    return inverse
+'''
+
+# From: https://github.com/candlewill/Griffin_lim/blob/master/utils/audio.py (Check license)
+'''
+import librosa
+def griffin_lim(S, fs, fft_len, niters=100):
+
+    frame_shift_ms  = 25
+    frame_length_ms = 50
+
+    def _stft(y):
+        #n_fft = (num_freq - 1) * 2
+        hop_length = int(frame_shift_ms / 1000 * fs)
+        win_length = int(frame_length_ms / 1000 * fs)
+        return librosa.stft(y=y, n_fft=fft_len, hop_length=hop_length, win_length=win_length)
+
+
+    def _istft(y):
+        hop_length = int(frame_shift_ms / 1000 * fs)
+        win_length = int(frame_length_ms / 1000 * fs)
+        return librosa.istft(y, hop_length=hop_length, win_length=win_length)
+
+    angles = np.exp(2j * np.pi * np.random.rand(*S.shape))
+    S_complex = np.abs(S).astype(np.complex)
+    for i in range(niters):
+        if i > 0:
+            angles = np.exp(1j * np.angle(_stft(y)))
+        y = _istft(S_complex * angles)
+    return y
+'''
+
+
 
 

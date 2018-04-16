@@ -60,7 +60,7 @@ if __name__ == '__main__':
     wav_file_orig = 'data_48k/wavs_nat/hvd_593.wav' # Original natural waveform. You can choose any of the provided ones in the /wavs_nat directory.
     out_dir       = 'data_48k/wavs_syn' # Where the synthesised waveform will be stored
 
-    b_plots       = True # True if you want to plot the extracted parameters.
+    b_plots       = False # True if you want to plot the extracted parameters.
 
     # PROCESS:============================================================================
     lu.mkdir(out_dir)
@@ -69,16 +69,34 @@ if __name__ == '__main__':
     print("Analysing.....................................................")
     m_mag, m_real, m_imag, v_f0, fs, v_shift = mp.analysis_lossless(wav_file_orig)
 
+
     # MODIFICATIONS:
     # You can modify the parameters here if wanted.
+    #lu.write_binfile(m_mag, out_dir + '/' + lu.get_filename(wav_file_orig) + '_copy_syn_lossless.mag')
 
     # SYNTHESIS:
     print("Synthesising.................................................")
-    v_syn_sig = mp.synthesis_from_lossless(m_mag, m_real, m_imag, v_f0, fs)
+    #v_syn_sig = mp.synthesis_from_lossless(m_mag, m_real, m_imag, v_f0, fs)
+
+
+    # Debug Griffin-Lim:
+    #'''
+    import numpy as np
+    # Undelay:
+    m_cmplx_phase = la.add_hermitian_half(m_real + m_imag * 1j, data_type='complex')
+    m_frms_gl = np.fft.ifft(m_cmplx_phase).real
+    m_frms_gl = np.fft.fftshift(m_frms_gl, axes=1)
+    m_cmplx_phase = la.remove_hermitian_half(np.fft.fft(m_frms_gl))
+
+    m_phase = np.angle(m_cmplx_phase)
+
+    v_syn_sig, m_phase_gl = mp.griffin_lim(m_mag, v_shift, phase_init=m_phase, niters=150)
+    #'''
 
     # SAVE WAV FILE:
     print("Saving wav file..............................................")
-    wav_file_syn = out_dir + '/' + lu.get_filename(wav_file_orig) + '_copy_syn_lossless.wav'
+    wav_file_syn = out_dir + '/' + lu.get_filename(wav_file_orig) + '_copy_syn_lossless_gl_magphase_i150.wav'
+    #wav_file_syn = out_dir + '/' + lu.get_filename(wav_file_orig) + '_copy_syn_lossless_normal.wav'
     la.write_audio_file(wav_file_syn, v_syn_sig, fs)
 
     # PLOTS:===============================================================================

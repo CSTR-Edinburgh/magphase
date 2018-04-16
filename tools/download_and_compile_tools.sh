@@ -10,7 +10,7 @@ echo "Compiling SPTK:===========================================================
 (
     cd SPTK-3.9;
     ./configure --prefix=$PWD/build;
-    make;
+    make -j;
     make install
 )
 
@@ -30,10 +30,20 @@ echo "Compiling REAPER:=========================================================
 echo "Removing temporary files:=================================================="
 mkdir -p ./bin
 cp ./REAPER/build/reaper ./bin
+
 cp ./SPTK-3.9/build/bin/mcep ./bin
+cp ./SPTK-3.9/build/bin/x2x ./bin
+cp ./SPTK-3.9/build/bin/freqt ./bin
+cp ./SPTK-3.9/build/bin/c2acr ./bin
+cp ./SPTK-3.9/build/bin/vopr ./bin
+cp ./SPTK-3.9/build/bin/mc2b ./bin
+cp ./SPTK-3.9/build/bin/bcp ./bin
+cp ./SPTK-3.9/build/bin/sopr ./bin
+cp ./SPTK-3.9/build/bin/merge ./bin
+cp ./SPTK-3.9/build/bin/b2mc ./bin
 
 rm -rf ./REAPER
 rm -rf ./SPTK-3.9
 
 
-echo "All tools successfully compiled!!"
+echo "All tools successfully compiled!"
