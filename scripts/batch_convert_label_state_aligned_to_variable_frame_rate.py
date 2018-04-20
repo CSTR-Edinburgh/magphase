@@ -17,8 +17,8 @@ This could happen if for example some phonemes had no frames assigned. This rare
 """
 
 import sys, os
-curr_dir = os.path.dirname(os.path.realpath(__file__))
-sys.path.append(os.path.realpath(curr_dir + '/../../src'))
+this_dir = os.path.dirname(os.path.realpath(__file__))
+sys.path.append(os.path.realpath(this_dir + '/../src'))
 
 import libutils as lu
 import libaudio as la
@@ -34,7 +34,7 @@ if __name__ == '__main__':
     files_scp       = '../demos/data_48k/file_id.scp'   # List of file names (tokens). Format used by Merlin.
     in_lab_st_dir   = '../demos/data_48k/labs'          # Original state aligned label files directory (in the format used by Merlin).
     in_shift_dir    = '../demos/data_48k/params_nat'    # Directory containing .shift files. You need to run feature extraction before running this script
-                                                        # (e.g., batch_feature_extrction_for_tts.py)
+                                                        # (e.g., batch_feature_extraction_for_tts.py)
     out_lab_st_dir  = '../demos/data_48k/labs_var_rate' # Directory that will contain the converted "variable frame rate" state aligned label files.
     b_prevent_zeros = False                             # True if you want to make sure that all the phonemes have one frame at least.
                                                         # (not recommended, only usful when there are too many utterances crashed)

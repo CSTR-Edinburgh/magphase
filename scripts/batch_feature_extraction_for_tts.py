@@ -25,7 +25,7 @@ If wanted, you can modify the input options (directories, input files, etc.) See
 
 import sys, os
 curr_dir = os.path.dirname(os.path.realpath(__file__))
-sys.path.append(os.path.realpath(curr_dir + '/../../src'))
+sys.path.append(os.path.realpath(curr_dir + '/../src'))
 import libutils as lu
 import magphase as mp
 
