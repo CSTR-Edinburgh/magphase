@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 """
 
-@author: felipe
+@author: Felipe Espic
 """
 import numpy as np
 import shutil

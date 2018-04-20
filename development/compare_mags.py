@@ -1,4 +1,9 @@
+#!/usr/bin/env python2
+# -*- coding: utf-8 -*-
+"""
 
+@author: Felipe Espic
+"""
 
 import sys, os
 this_dir = os.getcwd()
