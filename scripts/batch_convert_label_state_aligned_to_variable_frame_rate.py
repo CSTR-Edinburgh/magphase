@@ -17,7 +17,7 @@ This could happen if for example some phonemes had no frames assigned. This rare
 """
 
 import sys, os
-curr_dir = os.getcwd()
+curr_dir = os.path.dirname(os.path.realpath(__file__))
 sys.path.append(os.path.realpath(curr_dir + '/../../src'))
 
 import libutils as lu

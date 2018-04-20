@@ -18,7 +18,7 @@ If wanted, you can modify the input options and/or perform some modification to 
 extracted features before re-synthesis. See the main function below for details.
 """
 import sys, os
-this_dir = os.getcwd()
+this_dir = os.path.dirname(os.path.realpath(__file__))
 sys.path.append(os.path.realpath(this_dir + '/../src'))
 import numpy as np
 import libutils as lu

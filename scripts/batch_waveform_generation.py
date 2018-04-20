@@ -18,7 +18,7 @@ If you want to use this demo with real data to work with Merlin, just modify the
 See the main function below for details.
 """
 import sys, os
-curr_dir = os.getcwd()
+curr_dir = os.path.dirname(os.path.realpath(__file__))
 sys.path.append(os.path.realpath(curr_dir + '/../../src'))
 import libutils as lu
 from libplot import lp
