@@ -1900,22 +1900,6 @@ def synthesis_with_del_comp_and_ph_encoding3(m_spmgc, m_phs_mgc, m_phc_mgc, v_sh
     v_sig_syn = la.ola(m_frm_syn, v_pm)
      
     return v_sig_syn, m_frm_syn, m_mag_syn, m_sp_targ, m_frm_noise, m_frm_voi_noise, m_mag
- 
-#==============================================================================
-#def synthesis_wit_del_comp_from_raw_params(m_mag, m_real, m_imag, v_f0, fs):
-def synthesis_from_lossless(m_mag, m_real, m_imag, v_f0, fs):
-
-    m_ph_cmpx = m_real + m_imag * 1j
-    m_fft     = m_mag * m_ph_cmpx / np.absolute(m_ph_cmpx)
-    m_fft     = la.add_hermitian_half(m_fft, data_type='complex')
-    m_frm     = np.fft.ifft(m_fft).real
-    m_frm     = np.fft.fftshift(m_frm,  axes=1)
-    v_shift   = f0_to_shift(v_f0, fs, unv_frm_rate_ms=5)
-    v_pm      = la.shift_to_pm(v_shift)
-
-    v_syn_sig = ola(m_frm,v_pm)
-
-    return v_syn_sig
     
 #==============================================================================
 # If ph_hf_gen=='rand', generates random numbers for the phase above mvf
