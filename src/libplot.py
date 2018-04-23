@@ -2,6 +2,7 @@
 @author: Felipe Espic
 Personal library for plotting
 """
+import numpy as np
 import matplotlib
 matplotlib.use("Qt4Agg")
 from matplotlib import pyplot as lp
@@ -18,3 +19,13 @@ def plotm(m_data):
     lp.colorbar(ret)
     return
 lp.plotm = plotm
+
+
+def plot_pitch_marks(v_sig, v_pm_smpls):
+    lp.figure()
+    lp.plot(v_sig)
+    lp.vlines(v_pm_smpls, np.min(v_sig), np.max(v_sig), colors='r')
+    lp.grid()
+    return
+lp.plot_pitch_marks = plot_pitch_marks
+

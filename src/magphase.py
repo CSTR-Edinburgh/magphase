@@ -1753,9 +1753,29 @@ def synthesis_with_del_comp_and_ph_encoding4(m_spmgc, m_phs_mgc, m_phc_mgc, v_sh
         
     v_sig_syn = la.ola(m_frm_syn, v_pm, win_func=win_func)
      
-    return v_sig_syn, m_frm_syn, m_mag_syn, m_sp_targ, m_frm_noise, m_frm_voi_noise, m_mag    
+    return v_sig_syn, m_frm_syn, m_mag_syn, m_sp_targ, m_frm_noise, m_frm_voi_noise, m_mag
+ 
+#==============================================================================
+#def synthesis_wit_del_comp_from_raw_params(m_mag, m_real, m_imag, v_f0, fs):
+def synthesis_from_lossless(m_mag, m_real, m_imag, v_f0, fs):
 
+    m_ph_cmpx = m_real + m_imag * 1j
     
+    ### with protection against divide-by-zero:
+    m_ph_cmpx_mag = np.absolute(m_ph_cmpx)
+    m_ph_cmpx_mag[m_ph_cmpx_mag==0.0] = 1.0
+    m_fft     = m_mag * m_ph_cmpx / m_ph_cmpx_mag
+    
+    m_fft     = la.add_hermitian_half(m_fft, data_type='complex')
+    m_frm     = np.fft.ifft(m_fft).real
+    m_frm     = np.fft.fftshift(m_frm,  axes=1)
+    v_shift   = f0_to_shift(v_f0, fs, unv_frm_rate_ms=5)
+    v_pm      = la.shift_to_pm(v_shift)
+
+    v_syn_sig = ola(m_frm,v_pm)
+
+    return v_syn_sig
+
 #==============================================================================
 # v3: specific window handling for aperiodic spectrum in voiced segments.
 # v2: Improved phase generation. 
@@ -2875,13 +2895,17 @@ def analysis_lossless(wav_file, fft_len=None, out_dir=None):
     os.remove(est_file)
     v_pm_smpls = v_pm_sec * fs
 
-    # Spectral analysis:
-    m_fft, v_shift = analysis_with_del_comp_from_pm(v_sig, fs, v_pm_smpls, fft_len=fft_len)
-
     # Debug:
     if False:
         from libplot import lp
-        lp.plotm(np.absolute(m_fft))
+        #v_pm_one_zero = lu.indexes_to_one_zero_vector(v_pm_smpls, v_sig.size)
+        #lp.figure(); lp.plot(v_sig); lp.stem(v_pm_one_zero); lp.grid(); lp.show()
+        #lp.figure(); lp.plot(v_sig[:100]); lp.grid()
+        #lp.figure(); lp.plot(v_sig); lp.vlines(v_pm_smpls, np.min(v_sig), np.max(v_sig), colors='r'); lp.grid()
+        lp.plot_pitch_marks(v_sig, v_pm_smpls)
+
+    # Spectral analysis:
+    m_fft, v_shift = analysis_with_del_comp_from_pm(v_sig, fs, v_pm_smpls, fft_len=fft_len)
 
     # Getting high-ress magphase feats:
     m_mag, m_real, m_imag, v_f0 = compute_lossless_feats(m_fft, v_shift, v_voi, fs)
@@ -3308,7 +3332,6 @@ def define_crossfade_params(fs):
         warnings.warn('Constant crsf_cf not tested nor tunned to synthesise at fs=%d Hz.' % fs)
 
     return crsf_cf, crsf_bw
-
 
 
 def griffin_lim(m_mag, v_shift, win_func=np.hanning, phase_init='random', niters=30):
