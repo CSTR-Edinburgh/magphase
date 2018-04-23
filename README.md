@@ -71,8 +71,6 @@ We provide two demos distributed with the Merlin's official distribution. These 
 
 * Voice conversion: [Merlin's voice conversion demo](https://github.com/CSTR-Edinburgh/merlin/tree/master/egs/voice_conversion/s2) (roughly tested)
 
-* Build voice using your own data: (**TODO**)
-
 ## VIII. Colaboration:
 We need help to improve this software. You can colaborate by:
 
