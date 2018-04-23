@@ -9,7 +9,15 @@ This software is based on the method described in the paper:
 
 More information at http://www.felipeespic.com/magphase/
 
-## I. Description
+## I. New in Version 2.0 (April 2018)
+
+* Constant frame-rate support.
+* Improved sound quality.
+* Two types of post-filter available.
+* Selectable number of coefficients for phase features (*real* and *imag*).
+* Selectable number of coefficients for the magnitude feature (*mag*).
+
+## II. Description
 This is a speech waveform analysis/synthesis system used in Statistical Parametric Speech Synthesis (SPSS).
 
 The analysis module extracts four feature streams describing magnitude spectra, phase spectra, and F0. These features can be used to train a regression model (e.g., DNN, LSTM, HMM. etc.) so then, predicted values can be generated.
@@ -24,7 +32,7 @@ Key points:
 * Many other applications and improvements not explored yet.
 
 
-## II. Colaboration:
+## III. Colaboration:
 We need help to improve this software. You can colaborate by:
 
 * **Building TTS voices using Merlin and MagPhase and compare with other vocoders, e.g., WORLD.** Then, please tell us your results. We have tested MagPhase only with a few voices and it's needed to cover a wider range. We have recently fixed some bugs that have came out thanks to people reporting their results using new data.
@@ -33,15 +41,15 @@ We need help to improve this software. You can colaborate by:
 * **Implementing native variable frame rate support in Merlin.** MagPhase works in a variable frame rate fashion (pitch synchronous). So far, in order to integrate Merlin with MagPhase, we have been applying a suboptimal [workaround](https://github.com/CSTR-Edinburgh/merlin/blob/master/egs/slt_arctic/s2/scripts/convert_label_state_align_to_variable_frame_rate.py). We stronlgy believe that the performance will be highly increased if Merlin's supported variable frame rate. Plase, let us know if you are interested on colaborating on this.
 
 
-## III. License:
+## IV. License:
 See the LICENCE file for details.
 
-## IV. Requirements:
+## V. Requirements:
 * OS: Linux (MacOSx coming soon)
 * Python 2.7
 * Standard Python packages: numpy, scipy, soundfile, matplotlib
 
-## V. Install:
+## VI. Install:
 1. Install Pyhton 2.7 and the packages required using the package manager of your distro or by using the command pip (recomended).
 e.g.,
 ```
@@ -55,7 +63,7 @@ cd tools
 ```
 This will compile and configure SPTK and REAPER automatically for you...and that's it!
 
-## VI. Usage:
+## VII. Usage:
 Just go to ```/demos```, read the instructions inside the demo scripts, which are very discriptive.
 They should run out of the box by running ```python <demo_script>```.
 
@@ -66,7 +74,7 @@ Then, you can modify the demo scripts to suit your needs.
 
 **NOTE:** Just remember to run the scripts from their locations.
 
-## VII. Using MagPhase with the Merlin toolkit:
+## VIII. Using MagPhase with the Merlin toolkit:
 We provide two demos distributed with the Merlin's official distribution. These  show examples of the of Merlin with MagPhase integration:
 * Text-To-Speech: [Merlin's slt_arctic demo](https://github.com/CSTR-Edinburgh/merlin/tree/master/egs/slt_arctic/s2) (small and full subset versions)
 
