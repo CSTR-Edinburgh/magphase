@@ -1221,13 +1221,13 @@ def phase_uncompress_type1_mcep(m_real_mel, m_imag_mel, alpha, fft_len, fs):
 
     ncoeffs_comp = m_real_mel.shape[1]
     crsf_cf = define_crossfade_params(fs)[0]
-    nbins_mel_for_phase_comp = get_num_full_mel_coeffs_from_num_phase_coeffs(crsf_cf, ncoeffs_comp, alpha, fs)
+    mag_dim_for_phase_comp = get_num_full_mel_coeffs_from_num_phase_coeffs(crsf_cf, ncoeffs_comp, alpha, fs)
 
     f_intrp_real = interpolate.interp1d(np.arange(ncoeffs_comp), m_real_mel, kind='nearest', fill_value='extrapolate')
     f_intrp_imag = interpolate.interp1d(np.arange(ncoeffs_comp), m_imag_mel, kind='nearest', fill_value='extrapolate')
 
-    m_real_mel = f_intrp_real(np.arange(nbins_mel_for_phase_comp))
-    m_imag_mel = f_intrp_imag(np.arange(nbins_mel_for_phase_comp))
+    m_real_mel = f_intrp_real(np.arange(mag_dim_for_phase_comp))
+    m_imag_mel = f_intrp_imag(np.arange(mag_dim_for_phase_comp))
 
     fft_len_half = 1 + fft_len/2
     m_real = la.sp_mel_unwarp(m_real_mel, fft_len_half, alpha=alpha, in_type='log')
@@ -2259,9 +2259,9 @@ def post_filter_backup_old(m_mag_mel_log):
     av_len_end  = lu.round_to_int(3.0  * ncoeffs / 60.0)
 
     # Body:
-    nfrms, nbins_mel = m_mag_mel_log.shape
-    v_ave       = np.zeros(nbins_mel)
-    v_nx        = np.arange(np.floor(av_len_strt/2), nbins_mel - np.floor(av_len_end/2)).astype(int)
+    nfrms, mag_dim = m_mag_mel_log.shape
+    v_ave       = np.zeros(mag_dim)
+    v_nx        = np.arange(np.floor(av_len_strt/2), mag_dim - np.floor(av_len_end/2)).astype(int)
     v_lens      = np.linspace(av_len_strt, av_len_end, v_nx.size)
     v_lens      = (2*np.ceil(v_lens/2) - 1).astype(int)
 
@@ -2283,7 +2283,7 @@ def post_filter_backup_old(m_mag_mel_log):
         v_mag_mel_log_norm = v_mag_mel_log - v_ave
 
         # Enhance:==========================================================================
-        v_tilt_fact = np.linspace(2,6,nbins_mel)
+        v_tilt_fact = np.linspace(2,6,mag_dim)
         v_mag_mel_log_enh = (v_mag_mel_log_norm * v_tilt_fact) + v_ave
         v_mag_mel_log_enh[0]  = v_mag_mel_log[0]
         v_mag_mel_log_enh[-1] = v_mag_mel_log[-1]
@@ -2296,17 +2296,17 @@ def post_filter_backup_old(m_mag_mel_log):
 
 def post_filter(m_mag_mel_log, fs, av_len_at_zero=None, av_len_at_nyq=None, boost_at_zero=None, boost_at_nyq=None):
 
-    nfrms, nbins_mel = m_mag_mel_log.shape
-    if nbins_mel!=60:
+    nfrms, mag_dim = m_mag_mel_log.shape
+    if mag_dim!=60:
         warnings.warn('Post-filter: It has been only tested with 60 dimensional mag data. If you use another dimension, the result may be suboptimal.')
 
     # Defaults in case options are not provided by the user:
     if fs==48000:
         if av_len_at_zero is None:
-            av_len_at_zero = lu.round_to_int(11.0 * (nbins_mel / 60.0))
+            av_len_at_zero = lu.round_to_int(11.0 * (mag_dim / 60.0))
 
         if av_len_at_nyq is None:
-            av_len_at_nyq = lu.round_to_int(3.0  * (nbins_mel / 60.0))
+            av_len_at_nyq = lu.round_to_int(3.0  * (mag_dim / 60.0))
 
         if boost_at_zero is None:
             boost_at_zero = 1.8 # 2.0
@@ -2319,10 +2319,10 @@ def post_filter(m_mag_mel_log, fs, av_len_at_zero=None, av_len_at_nyq=None, boos
             warnings.warn('Post-filter: The default parameters for 16kHz sample rate have not being tunned.')
 
         if av_len_at_zero is None:
-            av_len_at_zero = lu.round_to_int(9.0 * (nbins_mel / 60.0))
+            av_len_at_zero = lu.round_to_int(9.0 * (mag_dim / 60.0))
 
         if av_len_at_nyq is None:
-            av_len_at_nyq = lu.round_to_int(12.0  * (nbins_mel / 60.0))
+            av_len_at_nyq = lu.round_to_int(12.0  * (mag_dim / 60.0))
 
         if boost_at_zero is None:
             boost_at_zero = 2.0 # 2.0
@@ -2337,8 +2337,8 @@ def post_filter(m_mag_mel_log, fs, av_len_at_zero=None, av_len_at_nyq=None, boos
                 '\nboost_at_nyq if you use another sample rate')
 
     # Body:
-    v_ave  = np.zeros(nbins_mel)
-    v_nx   = np.arange(np.floor(av_len_at_zero/2), nbins_mel - np.floor(av_len_at_nyq/2)).astype(int)
+    v_ave  = np.zeros(mag_dim)
+    v_nx   = np.arange(np.floor(av_len_at_zero/2), mag_dim - np.floor(av_len_at_nyq/2)).astype(int)
     v_lens = np.linspace(av_len_at_zero, av_len_at_nyq, v_nx.size)
     v_lens = (2*np.ceil(v_lens/2) - 1).astype(int)
 
@@ -2364,7 +2364,7 @@ def post_filter(m_mag_mel_log, fs, av_len_at_zero=None, av_len_at_nyq=None, boos
             from libplot import lp; lp.figure(); lp.plot(v_mag_mel_log); lp.plot(v_ave); lp.plot(v_mag_mel_log_norm); lp.grid(); lp.show()
 
         # Enhance:
-        v_tilt_fact = np.linspace(boost_at_zero, boost_at_nyq, nbins_mel)
+        v_tilt_fact = np.linspace(boost_at_zero, boost_at_nyq, mag_dim)
         v_mag_mel_log_enh = (v_mag_mel_log_norm * v_tilt_fact) + v_ave
         v_mag_mel_log_enh[0]  = v_mag_mel_log[0]
         v_mag_mel_log_enh[-1] = v_mag_mel_log[-1]
@@ -2378,17 +2378,17 @@ def post_filter(m_mag_mel_log, fs, av_len_at_zero=None, av_len_at_nyq=None, boos
 
 def post_filter_dev(m_mag_mel_log, fs, av_len_at_zero=None, av_len_at_nyq=None, boost_at_zero=None, boost_at_nyq=None):
 
-    nfrms, nbins_mel = m_mag_mel_log.shape
-    if nbins_mel!=60:
+    nfrms, mag_dim = m_mag_mel_log.shape
+    if mag_dim!=60:
         warnings.warn('Post-filter: It has been only tested with 60 dimensional mag data. If you use another dimension, the result may be suboptimal.')
 
     # Defaults in case options are not provided by the user:
     if fs==48000:
         if av_len_at_zero is None:
-            av_len_at_zero = lu.round_to_int(11.0 * (nbins_mel / 60.0))
+            av_len_at_zero = lu.round_to_int(11.0 * (mag_dim / 60.0))
 
         if av_len_at_nyq is None:
-            av_len_at_nyq = lu.round_to_int(3.0  * (nbins_mel / 60.0))
+            av_len_at_nyq = lu.round_to_int(3.0  * (mag_dim / 60.0))
 
         if boost_at_zero is None:
             boost_at_zero = 1.8 # 2.0
@@ -2401,10 +2401,10 @@ def post_filter_dev(m_mag_mel_log, fs, av_len_at_zero=None, av_len_at_nyq=None, 
             warnings.warn('Post-filter: The default parameters for 16kHz sample rate have not being tunned.')
 
         if av_len_at_zero is None:
-            av_len_at_zero = lu.round_to_int(9.0 * (nbins_mel / 60.0))
+            av_len_at_zero = lu.round_to_int(9.0 * (mag_dim / 60.0))
 
         if av_len_at_nyq is None:
-            av_len_at_nyq = lu.round_to_int(12.0  * (nbins_mel / 60.0))
+            av_len_at_nyq = lu.round_to_int(12.0  * (mag_dim / 60.0))
 
         if boost_at_zero is None:
             boost_at_zero = 2.0 # 2.0
@@ -2419,8 +2419,8 @@ def post_filter_dev(m_mag_mel_log, fs, av_len_at_zero=None, av_len_at_nyq=None, 
                 '\nboost_at_nyq if you use another sample rate')
 
     # Body:
-    v_ave  = np.zeros(nbins_mel)
-    v_nx   = np.arange(np.floor(av_len_at_zero/2), nbins_mel - np.floor(av_len_at_nyq/2)).astype(int)
+    v_ave  = np.zeros(mag_dim)
+    v_nx   = np.arange(np.floor(av_len_at_zero/2), mag_dim - np.floor(av_len_at_nyq/2)).astype(int)
     v_lens = np.linspace(av_len_at_zero, av_len_at_nyq, v_nx.size)
     v_lens = (2*np.ceil(v_lens/2) - 1).astype(int)
 
@@ -2453,7 +2453,7 @@ def post_filter_dev(m_mag_mel_log, fs, av_len_at_zero=None, av_len_at_nyq=None, 
             from libplot import lp; lp.figure(); lp.plot(v_mag_mel_log); lp.plot(v_ave); lp.plot(v_mag_mel_log_norm); lp.grid(); lp.show()
 
         # Enhance:
-        v_tilt_fact = np.linspace(boost_at_zero, boost_at_nyq, nbins_mel)
+        v_tilt_fact = np.linspace(boost_at_zero, boost_at_nyq, mag_dim)
         v_mag_mel_log_enh = (v_mag_mel_log_norm * v_tilt_fact) + v_ave
         v_mag_mel_log_enh[0]  = v_mag_mel_log[0]
         v_mag_mel_log_enh[-1] = v_mag_mel_log[-1]
@@ -2473,18 +2473,18 @@ def win_squared(L):
     v_win[quarter:quarter+half] = 1.0
     return v_win
 
-def get_num_full_mel_coeffs_from_num_phase_coeffs(freq_hz, nbins_phase, alpha, fs):
+def get_num_full_mel_coeffs_from_num_phase_coeffs(freq_hz, phase_dim, alpha, fs):
 
     crsf_cw = 2 * np.pi * freq_hz / float(fs)
     crsf_cf_mel = np.arctan(  (1-alpha**2) * np.sin(crsf_cw) / ((1+alpha**2)*np.cos(crsf_cw) - 2*alpha) )
     if crsf_cf_mel<0:
         crsf_cf_mel += np.pi
 
-    nmelcoeffs = lu.round_to_int(1 + (np.pi * (nbins_phase - 1) / float(crsf_cf_mel)))
+    nmelcoeffs = lu.round_to_int(1 + (np.pi * (phase_dim - 1) / float(crsf_cf_mel)))
     return nmelcoeffs
 
 
-def format_for_modelling(m_mag, m_real, m_imag, v_f0, fs, nbins_mel=60, nbins_phase=45, b_mag_fbank_mel=False, alpha_phase=None):
+def format_for_modelling(m_mag, m_real, m_imag, v_f0, fs, mag_dim=60, phase_dim=45, b_mag_fbank_mel=False, alpha_phase=None):
     '''
     b_fbank_mel: If True, Mel compression done by the filter bank approach. Otherwise, it uses sptk mcep related funcs.
     '''
@@ -2499,10 +2499,10 @@ def format_for_modelling(m_mag, m_real, m_imag, v_f0, fs, nbins_mel=60, nbins_ph
 
     # Mag to Log-Mag-Mel (compression):
     if b_mag_fbank_mel:
-        m_mag_mel = la.sp_mel_warp_fbank(m_mag, nbins_mel, alpha=alpha)
-        #m_mag_mel = la.sp_mel_warp_fbank_2d(m_mag, nbins_mel, alpha=alpha) # Don't delete
+        m_mag_mel = la.sp_mel_warp_fbank(m_mag, mag_dim, alpha=alpha)
+        #m_mag_mel = la.sp_mel_warp_fbank_2d(m_mag, mag_dim, alpha=alpha) # Don't delete
     else:
-        m_mag_mel = la.sp_mel_warp(m_mag, nbins_mel, alpha=alpha, in_type=3)
+        m_mag_mel = la.sp_mel_warp(m_mag, mag_dim, alpha=alpha, in_type=3)
 
     m_mag_mel_log =  la.log(m_mag_mel)
 
@@ -2512,14 +2512,14 @@ def format_for_modelling(m_mag, m_real, m_imag, v_f0, fs, nbins_mel=60, nbins_ph
     if alpha_phase is None:
         alpha_phase = alpha
 
-    nbins_mel_for_phase_comp = get_num_full_mel_coeffs_from_num_phase_coeffs(crsf_cf, nbins_phase, alpha_phase, fs)
+    mag_dim_for_phase_comp = get_num_full_mel_coeffs_from_num_phase_coeffs(crsf_cf, phase_dim, alpha_phase, fs)
 
-    m_real_mel = la.sp_mel_warp(m_real, nbins_mel_for_phase_comp, alpha=alpha_phase, in_type=2)
-    m_imag_mel = la.sp_mel_warp(m_imag, nbins_mel_for_phase_comp, alpha=alpha_phase, in_type=2)
+    m_real_mel = la.sp_mel_warp(m_real, mag_dim_for_phase_comp, alpha=alpha_phase, in_type=2)
+    m_imag_mel = la.sp_mel_warp(m_imag, mag_dim_for_phase_comp, alpha=alpha_phase, in_type=2)
 
     # Cutting phase vectors:
-    m_real_mel = m_real_mel[:,:nbins_phase]
-    m_imag_mel = m_imag_mel[:,:nbins_phase]
+    m_real_mel = m_real_mel[:,:phase_dim]
+    m_imag_mel = m_imag_mel[:,:phase_dim]
 
     # Removing phase in unvoiced frames ("random" values):
     m_real_mel = m_real_mel * v_voi[:,None]
@@ -2541,7 +2541,7 @@ def format_for_modelling(m_mag, m_real, m_imag, v_f0, fs, nbins_mel=60, nbins_ph
     return m_mag_mel_log, m_real_mel, m_imag_mel, v_lf0_smth
 
 
-def format_for_modelling_phase_comp(m_mag, m_real, m_imag, v_f0, fs, nbins_mel=60, nbins_phase=10, b_mag_fbank_mel=False):
+def format_for_modelling_phase_comp(m_mag, m_real, m_imag, v_f0, fs, mag_dim=60, phase_dim=10, b_mag_fbank_mel=False):
     '''
     format_for_modelling with phase compression based on filter bank. It didn't work very well according to experiments.
 
@@ -2560,11 +2560,11 @@ def format_for_modelling_phase_comp(m_mag, m_real, m_imag, v_f0, fs, nbins_mel=6
     if b_mag_fbank_mel:
 
         # Debug:
-        m_mag_mel = la.sp_mel_warp_fbank(m_mag, nbins_mel, alpha=alpha)
-        #m_mag_mel = la.sp_mel_warp_fbank_2d(m_mag, nbins_mel, alpha=alpha)
+        m_mag_mel = la.sp_mel_warp_fbank(m_mag, mag_dim, alpha=alpha)
+        #m_mag_mel = la.sp_mel_warp_fbank_2d(m_mag, mag_dim, alpha=alpha)
 
     else:
-        m_mag_mel = la.sp_mel_warp(m_mag, nbins_mel, alpha=alpha, in_type=3)
+        m_mag_mel = la.sp_mel_warp(m_mag, mag_dim, alpha=alpha, in_type=3)
 
     m_mag_mel_log =  la.log(m_mag_mel)
 
@@ -2586,8 +2586,8 @@ def format_for_modelling_phase_comp(m_mag, m_real, m_imag, v_f0, fs, nbins_mel=6
     m_real_shrt = m_real[:,:max_bin_ph]
     m_imag_shrt = m_imag[:,:max_bin_ph]
     #--------------------------------------------------------------------------------
-    m_real_mel = la.apply_fbank(m_real_shrt, v_bins_mel, nbins_phase)[0]
-    m_imag_mel = la.apply_fbank(m_imag_shrt, v_bins_mel, nbins_phase)[0]
+    m_real_mel = la.apply_fbank(m_real_shrt, v_bins_mel, phase_dim)[0]
+    m_imag_mel = la.apply_fbank(m_imag_shrt, v_bins_mel, phase_dim)[0]
 
 
     # Debug (phase ratio):
@@ -2595,7 +2595,7 @@ def format_for_modelling_phase_comp(m_mag, m_real, m_imag, v_f0, fs, nbins_mel=6
         nfrms = m_mag.shape[0]
         #m_ratio_shrt = np.arctan(np.abs(m_imag_shrt / m_real_shrt))
         m_ratio_shrt = np.arctan((m_imag_shrt / m_real_shrt))
-        m_ratio_mel  = la.apply_fbank(m_ratio_shrt, v_bins_mel, nbins_phase)[0]
+        m_ratio_mel  = la.apply_fbank(m_ratio_shrt, v_bins_mel, phase_dim)[0]
         m_ratio_shrt_rec = la.unwarp_from_fbank(m_ratio_mel, v_bins_mel, interp_kind='slinear')
 
         m_ratio_rec  = np.hstack((m_ratio_shrt_rec, m_ratio_shrt_rec[:,-1][:,None] + np.zeros((nfrms, fft_len_half-max_bin_ph))))
@@ -2696,12 +2696,12 @@ def format_for_modelling_phase_comp(m_mag, m_real, m_imag, v_f0, fs, nbins_mel=6
         figure(); plot(m_mag_log[252:255,:].T); plot(m_mag_log_rec[252:255,:].T); grid()
 
     # -----------------------------------------------
-    #m_imag_mel = la.sp_mel_warp(m_imag, nbins_mel, alpha=alpha, in_type=2)
-    #m_real_mel = la.sp_mel_warp(m_real, nbins_mel, alpha=alpha, in_type=2)
+    #m_imag_mel = la.sp_mel_warp(m_imag, mag_dim, alpha=alpha, in_type=2)
+    #m_real_mel = la.sp_mel_warp(m_real, mag_dim, alpha=alpha, in_type=2)
 
     # Cutting phase vectors:
-    #m_real_mel = m_real_mel[:,:nbins_phase]
-    #m_imag_mel = m_imag_mel[:,:nbins_phase]
+    #m_real_mel = m_real_mel[:,:phase_dim]
+    #m_imag_mel = m_imag_mel[:,:phase_dim]
 
     # Removing phase in unvoiced frames ("random" values):
     m_real_mel = m_real_mel * v_voi[:,None]
@@ -2714,7 +2714,7 @@ def format_for_modelling_phase_comp(m_mag, m_real, m_imag, v_f0, fs, nbins_mel=6
     return m_mag_mel_log, m_real_mel, m_imag_mel, v_lf0_smth
 
 
-def format_for_modelling_old(m_mag, m_real, m_imag, v_f0, fs, nbins_mel=60, nbins_phase=45, b_fbank_mel=False):
+def format_for_modelling_old(m_mag, m_real, m_imag, v_f0, fs, mag_dim=60, phase_dim=45, b_fbank_mel=False):
     '''
     b_fbank_mel: If True, Mel compression done by the filter bank approach. Otherwise, it uses sptk mcep related funcs.
     '''
@@ -2729,16 +2729,16 @@ def format_for_modelling_old(m_mag, m_real, m_imag, v_f0, fs, nbins_mel=60, nbin
 
     # Mag to Log-Mag-Mel (compression):
     if b_fbank_mel:
-        m_mag_mel = la.sp_mel_warp_fbank(m_mag, nbins_mel, alpha=alpha)
+        m_mag_mel = la.sp_mel_warp_fbank(m_mag, mag_dim, alpha=alpha)
     else:
-        m_mag_mel = la.sp_mel_warp(m_mag, nbins_mel, alpha=alpha, in_type=3)
+        m_mag_mel = la.sp_mel_warp(m_mag, mag_dim, alpha=alpha, in_type=3)
 
     m_mag_mel_log =  la.log(m_mag_mel)
 
     # Debug:-----------------
     #'''
     if False: # Debug
-        m_mag_mel_debug, v_cntrs = sp_mel_warp(m_mag, nbins_mel, alpha=alpha)
+        m_mag_mel_debug, v_cntrs = sp_mel_warp(m_mag, mag_dim, alpha=alpha)
         m_mag_mel_log_debug = np.log(m_mag_mel_debug)
         m_mag_log_rec_debug = sp_mel_unwarp(m_mag_mel_log_debug, v_cntrs, m_mag.shape[1])
         m_mag_log_rec = la.sp_mel_unwarp(m_mag_mel_log, m_mag.shape[1])
@@ -2762,13 +2762,13 @@ def format_for_modelling_old(m_mag, m_real, m_imag, v_f0, fs, nbins_mel=60, nbin
         nx=171; lp.figure(); lp.plot(m_mag[nx,:]); lp.plot(m_mag_mel_log[nx,:]); lp.plot(m_mag_mel_log_debug[nx,:]); lp.grid()
 
     # Phase feats to Mel-phase (compression):
-    m_imag_mel = la.sp_mel_warp(m_imag, nbins_mel, alpha=alpha, in_type=2)
-    m_real_mel = la.sp_mel_warp(m_real, nbins_mel, alpha=alpha, in_type=2)
+    m_imag_mel = la.sp_mel_warp(m_imag, mag_dim, alpha=alpha, in_type=2)
+    m_real_mel = la.sp_mel_warp(m_real, mag_dim, alpha=alpha, in_type=2)
 
     # Cutting phase vectors:
-    # NOTE (Don't delete!): If nbins_phase=45, the approx mvb is 397 for fft_len=4096
-    m_real_mel = m_real_mel[:,:nbins_phase]
-    m_imag_mel = m_imag_mel[:,:nbins_phase]
+    # NOTE (Don't delete!): If phase_dim=45, the approx mvb is 397 for fft_len=4096
+    m_real_mel = m_real_mel[:,:phase_dim]
+    m_imag_mel = m_imag_mel[:,:phase_dim]
 
     # Removing phase in unvoiced frames ("random" values):
     m_real_mel = m_real_mel * v_voi[:,None]
@@ -2898,7 +2898,7 @@ def analysis_lossless(wav_file, fft_len=None, out_dir=None):
 
     return m_mag, m_real, m_imag, v_f0, fs, v_shift
 
-def analysis_compressed_type1(wav_file, fft_len=None, out_dir=None, nbins_mel=60, nbins_phase=45, const_rate_ms=-1.0):
+def analysis_compressed_type1(wav_file, fft_len=None, out_dir=None, mag_dim=60, phase_dim=45, const_rate_ms=-1.0):
 
     # Analysis:
     m_mag, m_real, m_imag, v_f0, fs, v_shift = analysis_lossless(wav_file, fft_len=fft_len)
@@ -2918,7 +2918,7 @@ def analysis_compressed_type1(wav_file, fft_len=None, out_dir=None, nbins_mel=60
         v_f0  *= v_voi # Double check this. At the beginning of voiced segments.
 
     # Formatting for Acoustic Modelling:
-    m_mag_mel_log, m_real_mel, m_imag_mel, v_lf0_smth = format_for_modelling(m_mag, m_real, m_imag, v_f0, fs, nbins_mel=nbins_mel, nbins_phase=nbins_phase)
+    m_mag_mel_log, m_real_mel, m_imag_mel, v_lf0_smth = format_for_modelling(m_mag, m_real, m_imag, v_f0, fs, mag_dim=mag_dim, phase_dim=phase_dim)
     fft_len = 2*(np.size(m_mag,1) - 1)
 
     # Save features:
@@ -2937,7 +2937,7 @@ def analysis_compressed_type1(wav_file, fft_len=None, out_dir=None, nbins_mel=60
 
 
 
-def analysis_compressed(wav_file, fft_len=None, nbins_mel=60, nbins_phase=10,
+def analysis_compressed(wav_file, fft_len=None, mag_dim=60, phase_dim=10,
                                             b_const_rate=False, b_mag_fbank_mel=False, alpha_phase=None):
     '''
     Analyses a wavefile and extract compressed features for acoustic modelling.
@@ -2945,8 +2945,8 @@ def analysis_compressed(wav_file, fft_len=None, nbins_mel=60, nbins_phase=10,
     Params:
     wav_file:     Waveform to be analysed.
     fft_len:      FFT length. If None, its value is set according to the sample rate.
-    nbins_mel:    Number of coefficents (bins) for the Log Magnitude feature (mag).
-    nbins_phase:  Number of coefficents (bins) for the phase features (real and imag).
+    mag_dim:      Number of coefficents (bins) for the Log Magnitude feature (mag).
+    phase_dim:    Number of coefficents (bins) for the phase features (real and imag).
     b_const_rate: If False, output given in variable-frame rate fashion (pitch synchronous) [Default]
                   If True, output given in 5ms constant frame rate shift.
 
@@ -2973,8 +2973,8 @@ def analysis_compressed(wav_file, fft_len=None, nbins_mel=60, nbins_phase=10,
         v_f0  *= v_voi # Double check this. At the beginning of voiced segments.
 
     # Formatting for Acoustic Modelling:
-    m_mag_mel_log, m_real_mel, m_imag_mel, v_lf0_smth = format_for_modelling(m_mag, m_real, m_imag, v_f0, fs, nbins_mel=nbins_mel,
-                                                                                    nbins_phase=nbins_phase, alpha_phase=alpha_phase)
+    m_mag_mel_log, m_real_mel, m_imag_mel, v_lf0_smth = format_for_modelling(m_mag, m_real, m_imag, v_f0, fs, mag_dim=mag_dim,
+                                                                                    phase_dim=phase_dim, alpha_phase=alpha_phase)
 
     fft_len = 2*(np.size(m_mag,1) - 1)
 
@@ -2982,7 +2982,7 @@ def analysis_compressed(wav_file, fft_len=None, nbins_mel=60, nbins_phase=10,
 
 
 
-def analysis_for_acoustic_modelling(wav_file, out_dir, fft_len=None, nbins_mel=60, nbins_phase=10,
+def analysis_for_acoustic_modelling(wav_file, out_dir, fft_len=None, mag_dim=60, phase_dim=10,
                                             b_const_rate=False, b_mag_fbank_mel=False, alpha_phase=None):
     '''
     Analyses a wavefile and extract compressed features for acoustic modelling.
@@ -2991,15 +2991,15 @@ def analysis_for_acoustic_modelling(wav_file, out_dir, fft_len=None, nbins_mel=6
     wav_file:     Waveform to be analysed.
     fft_len:      FFT length. If None, its value is set according to the sample rate.
     out_dir:      Directory where MagPhase features will be stored.
-    nbins_mel:    Number of coefficents (bins) for the Log Magnitude feature (mag).
-    nbins_phase:  Number of coefficents (bins) for the phase features (real and imag).
+    mag_dim:      Number of coefficents (bins) for the Log Magnitude feature (mag).
+    phase_dim:    Number of coefficents (bins) for the phase features (real and imag).
     b_const_rate: If False, output given in variable-frame rate fashion (pitch synchronous) [Default]
                   If True, output given in 5ms constant frame rate shift.
 
     b_mag_fbank_mel, alpha_phase: Experimental.
     '''
 
-    m_mag_mel_log, m_real_mel, m_imag_mel, v_lf0_smth, v_shift, fs, fft_len = analysis_compressed(wav_file, fft_len=fft_len, nbins_mel=nbins_mel, nbins_phase=nbins_phase,
+    m_mag_mel_log, m_real_mel, m_imag_mel, v_lf0_smth, v_shift, fs, fft_len = analysis_compressed(wav_file, fft_len=fft_len, mag_dim=mag_dim, phase_dim=phase_dim,
                                                                                         b_const_rate=b_const_rate, b_mag_fbank_mel=b_mag_fbank_mel, alpha_phase=b_mag_fbank_mel)
 
 
@@ -3015,7 +3015,7 @@ def analysis_for_acoustic_modelling(wav_file, out_dir, fft_len=None, nbins_mel=6
     return
 
 def analysis_compressed_type1_with_phase_comp(wav_file, fft_len=None, out_dir=None,
-                                                    nbins_mel=60, nbins_phase=10, b_const_rate=False, b_mag_fbank_mel=False):
+                                                    mag_dim=60, phase_dim=10, b_const_rate=False, b_mag_fbank_mel=False):
 
     '''
     analysis_compressed_type1 with phase compression based on filter bank. It didn't work very well according to experiments.
@@ -3049,17 +3049,17 @@ def analysis_compressed_type1_with_phase_comp(wav_file, fft_len=None, out_dir=No
     #m_real[320, 395] = 1.0
 
     # Formatting for Acoustic Modelling:
-    m_mag_mel_log, m_real_mel, m_imag_mel, v_lf0_smth = format_for_modelling_phase_comp(m_mag, m_real, m_imag, v_f0, fs, nbins_mel=nbins_mel, nbins_phase=nbins_phase)
+    m_mag_mel_log, m_real_mel, m_imag_mel, v_lf0_smth = format_for_modelling_phase_comp(m_mag, m_real, m_imag, v_f0, fs, mag_dim=mag_dim, phase_dim=phase_dim)
 
 
     # Debug: Reconstruction
-    # m_mag_mel_log_orig, m_real_mel_orig, m_imag_mel_orig, v_lf0_smth_orig = format_for_modelling(m_mag, m_real, m_imag, v_f0, fs, nbins_mel=nbins_mel, nbins_phase=nbins_phase)
+    # m_mag_mel_log_orig, m_real_mel_orig, m_imag_mel_orig, v_lf0_smth_orig = format_for_modelling(m_mag, m_real, m_imag, v_f0, fs, mag_dim=mag_dim, phase_dim=phase_dim)
     # crsf_cf, crsf_bw = define_crossfade_params(fs)
     # alpha = define_alpha(fs)
     # fft_len = define_fft_len(fs)
     # m_real_rec, m_imag_rec = phase_uncompress_fbank(m_real_mel, m_imag_mel, crsf_cf, crsf_bw, alpha, fft_len, fs)
 
-    # m_real_rec_orig, m_imag_rec_orig = phase_uncompress_type1(m_real_mel_orig, m_imag_mel_orig, alpha, fft_len, nbins_mel)
+    # m_real_rec_orig, m_imag_rec_orig = phase_uncompress_type1(m_real_mel_orig, m_imag_mel_orig, alpha, fft_len, mag_dim)
 
     if False:
         plm(m_real_mel_orig)
@@ -3113,7 +3113,7 @@ def compute_imag_from_real(start_sign, v_real):
     return v_imag
 
 
-def analysis_compressed_type2(wav_file, fft_len=None, out_dir=None, nbins_mel=60, nbins_phase=45, b_norm_mag=False, const_rate_ms=-1.0):
+def analysis_compressed_type2(wav_file, fft_len=None, out_dir=None, mag_dim=60, phase_dim=45, b_norm_mag=False, const_rate_ms=-1.0):
 
     # Analysis:
     m_mag, m_real, m_imag, v_f0, fs, v_shift, v_gain = analysis_lossless_type2(wav_file, fft_len=fft_len)
@@ -3163,7 +3163,7 @@ def analysis_compressed_type2(wav_file, fft_len=None, out_dir=None, nbins_mel=60
         nx=312; lp.figure(); lp.plot(m_mag_log_norm[nx:nx+3,:].T); lp.grid()
 
     # Formatting for Acoustic Modelling:
-    m_mag_mel_log, m_real_mel, m_imag_mel, v_lf0_smth = format_for_modelling(m_mag, m_real, m_imag, v_f0, fs, nbins_mel=nbins_mel, nbins_phase=nbins_phase)
+    m_mag_mel_log, m_real_mel, m_imag_mel, v_lf0_smth = format_for_modelling(m_mag, m_real, m_imag, v_f0, fs, mag_dim=mag_dim, phase_dim=phase_dim)
     fft_len = 2*(np.size(m_mag,1) - 1)
     v_lgain = la.log(v_gain)
 
@@ -3189,7 +3189,7 @@ def analysis_compressed_type2(wav_file, fft_len=None, out_dir=None, nbins_mel=60
     return m_mag_mel_log, m_real_mel, m_imag_mel, v_lf0_smth, v_shift, fs, fft_len, v_lgain
 
 
-def synthesis_from_acoustic_modelling_old(in_feats_dir, filename_token, out_syn_dir, nbins_mel, nbins_phase, fs, fft_len=None, pf_type='no', magphase_type='type1', b_const_rate=False):
+def synthesis_from_acoustic_modelling_old(in_feats_dir, filename_token, out_syn_dir, mag_dim, phase_dim, fs, fft_len=None, pf_type='no', magphase_type='type1', b_const_rate=False):
     '''
     pf_type: Postfilter type: 'merlin' (Merlin's style), 'magphase' (MagPhase's own postfilter (in development)), or 'no'.
     '''
@@ -3200,9 +3200,9 @@ def synthesis_from_acoustic_modelling_old(in_feats_dir, filename_token, out_syn_
     print("\nSynthesising file: " + filename_token + '.wav............................')
 
     # Reading parameter files:
-    m_mag_mel_log = lu.read_binfile(in_feats_dir + '/' + filename_token + '.mag' , dim=nbins_mel)
-    m_real_mel    = lu.read_binfile(in_feats_dir + '/' + filename_token + '.real', dim=nbins_phase)
-    m_imag_mel    = lu.read_binfile(in_feats_dir + '/' + filename_token + '.imag', dim=nbins_phase)
+    m_mag_mel_log = lu.read_binfile(in_feats_dir + '/' + filename_token + '.mag' , dim=mag_dim)
+    m_real_mel    = lu.read_binfile(in_feats_dir + '/' + filename_token + '.real', dim=phase_dim)
+    m_imag_mel    = lu.read_binfile(in_feats_dir + '/' + filename_token + '.imag', dim=phase_dim)
     v_lf0         = lu.read_binfile(in_feats_dir + '/' + filename_token + '.lf0' , dim=1)
 
     if pf_type=='magphase':
@@ -3219,7 +3219,7 @@ def synthesis_from_acoustic_modelling_old(in_feats_dir, filename_token, out_syn_
     la.write_audio_file(out_syn_dir + '/' + filename_token + '.wav', v_syn_sig, fs)
     return
 
-def synthesis_from_acoustic_modelling(in_feats_dir, filename_token, out_syn_dir, nbins_mel, nbins_phase, fs,
+def synthesis_from_acoustic_modelling(in_feats_dir, filename_token, out_syn_dir, mag_dim, phase_dim, fs,
                                             fft_len=None, pf_type='no', b_const_rate=False):
     '''
     Synthesises a waveform from compressed MagPhase features.
@@ -3228,8 +3228,8 @@ def synthesis_from_acoustic_modelling(in_feats_dir, filename_token, out_syn_dir,
     in_feats_dir:   Directory containing the MagPhase features .mag, .real, .imag, and .lf0
     filename_token: Name of the utterace. E.g., "arctic_a0001"
     out_syn_dir:    Directory where the synthesised waveform will be stored.
-    nbins_mel:      Number of coefficents (bins) for the Log Magnitude feature (mag).
-    nbins_phase:    Number of coefficents (bins) for the phase features (real and imag).
+    mag_dim:        Number of coefficents (bins) for the Log Magnitude feature (mag).
+    phase_dim:      Number of coefficents (bins) for the phase features (real and imag).
                     Typical values: 45, 20, 10.
     fs:             Sample rate.
     fft_len:        FFT length. If None, its value is set according to the sample rate.
@@ -3244,9 +3244,9 @@ def synthesis_from_acoustic_modelling(in_feats_dir, filename_token, out_syn_dir,
     print("\nSynthesising file: " + filename_token + '.wav............................')
 
     # Reading parameter files:
-    m_mag_mel_log = lu.read_binfile(in_feats_dir + '/' + filename_token + '.mag' , dim=nbins_mel)
-    m_real_mel    = lu.read_binfile(in_feats_dir + '/' + filename_token + '.real', dim=nbins_phase)
-    m_imag_mel    = lu.read_binfile(in_feats_dir + '/' + filename_token + '.imag', dim=nbins_phase)
+    m_mag_mel_log = lu.read_binfile(in_feats_dir + '/' + filename_token + '.mag' , dim=mag_dim)
+    m_real_mel    = lu.read_binfile(in_feats_dir + '/' + filename_token + '.real', dim=phase_dim)
+    m_imag_mel    = lu.read_binfile(in_feats_dir + '/' + filename_token + '.imag', dim=phase_dim)
     v_lf0         = lu.read_binfile(in_feats_dir + '/' + filename_token + '.lf0' , dim=1)
 
     if pf_type=='magphase':

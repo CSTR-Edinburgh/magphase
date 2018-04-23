@@ -5,9 +5,9 @@
 
 DESCRIPTION:
 This script synthesises waveforms from the MagPhase parameters predicted by Merlin:
-- *.mag:  Mel-scaled Log-Mag (dim=nbins_mel,   usually 60).
-- *.real: Mel-scaled real    (dim=nbins_phase, usually 45).
-- *.imag: Mel-scaled imag    (dim=nbins_phase, usually 45).
+- *.mag:  Mel-scaled Log-Mag (dim=mag_dim,   usually 60).
+- *.real: Mel-scaled real    (dim=phase_dim, usually 45).
+- *.imag: Mel-scaled imag    (dim=phase_dim, usually 45).
 - *.lf0:  Log-F0 (dim=1).
 
 NOTE: Actually, it can be used to synthesise waveforms from any MagPhase parameters (no Merlin required).
@@ -24,8 +24,8 @@ import libutils as lu
 from libplot import lp
 import magphase as mp
 
-def synthesis(in_feats_dir, filename_token, out_syn_dir, nbins_mel, nbins_phase, fs, pf_type):
-    mp.synthesis_from_acoustic_modelling(in_feats_dir, filename_token, out_syn_dir, nbins_mel, nbins_phase, fs, pf_type=pf_type, b_const_rate=False)
+def synthesis(in_feats_dir, filename_token, out_syn_dir, mag_dim, phase_dim, fs, pf_type):
+    mp.synthesis_from_acoustic_modelling(in_feats_dir, filename_token, out_syn_dir, mag_dim, phase_dim, fs, pf_type=pf_type, b_const_rate=False)
     return
 
 if __name__ == '__main__':  
@@ -40,13 +40,13 @@ if __name__ == '__main__':
     out_syn_dir   = '../demos/data_48k/wavs_syn_from_predicted' # Where the synthesised waveform will be stored.
 
 
-    nbins_mel     = 60          # Number of Mel-scaled frequency bins.
-    nbins_phase   = 45          # Number of Mel-scaled frequency bins kept for phase features (real and imag). It must be <= nbins_mel
-    pf_type       = 'magphase'  # "magphase": MagPhase's own postfilter (in development)
-                                # "merlin":   Merlin's style postfilter.
-                                # "no":       No postfilter.
+    mag_dim     = 60         # Number of Mel-scaled frequency bins.
+    phase_dim   = 45         # Number of Mel-scaled frequency bins kept for phase features (real and imag). It must be <= mag_dim
+    pf_type     = 'magphase' # "magphase": MagPhase's own postfilter (in development)
+                             # "merlin":   Merlin's style postfilter.
+                             # "no":       No postfilter.
 
-    b_multiproc   = False  # If True, it synthesises using all the available cores in parallel. If False, it just uses one core (slower).
+    b_multiproc   = False    # If True, it synthesises using all the available cores in parallel. If False, it just uses one core (slower).
 
 
     # FILES SETUP:========================================================================
@@ -55,10 +55,10 @@ if __name__ == '__main__':
 
     # PROCESSING:=========================================================================
     if b_multiproc:
-        lu.run_multithreaded(synthesis, in_feats_dir, l_file_tokns, out_syn_dir, nbins_mel, nbins_phase, fs, pf_type)
+        lu.run_multithreaded(synthesis, in_feats_dir, l_file_tokns, out_syn_dir, mag_dim, phase_dim, fs, pf_type)
     else:
         for file_tokn in l_file_tokns:
-            synthesis(in_feats_dir, file_tokn, out_syn_dir, nbins_mel, nbins_phase, fs, pf_type)
+            synthesis(in_feats_dir, file_tokn, out_syn_dir, mag_dim, phase_dim, fs, pf_type)
 
 
     print('Done!')

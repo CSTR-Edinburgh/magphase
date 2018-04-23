@@ -8,8 +8,8 @@ This script extracts low-dimensional acoustic parameters from a wave file.
 Then, it resynthesises the signal from these features.
 Features:
 - m_mag_mel_log: Mel-scaled Log-Mag (dim=nbins_mel,   usually 60).
-- m_real_mel:    Mel-scaled real    (dim=nbins_phase, usually 45).
-- m_imag_mel:    Mel-scaled imag    (dim=nbins_phase, usually 45).
+- m_real_mel:    Mel-scaled real    (dim=phase_dim, usually 45).
+- m_imag_mel:    Mel-scaled imag    (dim=phase_dim, usually 45).
 - v_lf0:         Log-F0 (dim=1).
 
 INSTRUCTIONS:
@@ -59,15 +59,16 @@ if __name__ == '__main__':
 
     # INPUT:==============================================================================
     wav_file_orig = 'data_48k/wavs_nat/hvd_593.wav' # Original natural wave file. You can choose anyone provided in the /wavs_nat directory.
-    b_const_rate = True
-    nbins_phase  = 45
+    b_const_rate  = True
+    mag_dim       = 100
+    phase_dim     = 45
 
     # PROCESS:============================================================================
     lu.mkdir(out_dir)
 
     # ANALYSIS:
     print("Analysing.....................................................")
-    m_mag_mel_log, m_real_mel, m_imag_mel, v_lf0_smth, v_shift, fs, fft_len = mp.analysis_compressed(wav_file_orig, nbins_phase=nbins_phase,
+    m_mag_mel_log, m_real_mel, m_imag_mel, v_lf0_smth, v_shift, fs, fft_len = mp.analysis_compressed(wav_file_orig, mag_dim=mag_dim, phase_dim=phase_dim,
                                                                                                                     b_const_rate=b_const_rate)
 
     # MODIFICATIONS:
@@ -79,7 +80,7 @@ if __name__ == '__main__':
 
     # SAVE WAV FILE:
     print("Saving wav file..............................................")
-    wav_file_syn = out_dir + '/' + lu.get_filename(wav_file_orig) + ('_copy_syn_low_dim_ph_dim_%d_const_rate_%d.wav' % (nbins_phase, b_const_rate))
+    wav_file_syn = out_dir + '/' + lu.get_filename(wav_file_orig) + ('_copy_syn_low_dim_mag_dim_%d_ph_dim_%d_const_rate_%d.wav' % (mag_dim, phase_dim, b_const_rate))
     la.write_audio_file(wav_file_syn, v_syn_sig, fs)
 
     # PLOTS:===============================================================================
