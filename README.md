@@ -37,7 +37,7 @@ See the LICENCE file for details.
 ## IV. Requirements:
 * OS: Linux (MacOSx coming soon)
 * Python 2.7
-* Standard Python packages: numpy, scipy, soundfile, matplotlib
+* Python packages: numpy, scipy, soundfile, matplotlib
 
 ## V. Install:
 1. Install Pyhton 2.7 and the packages required using the package manager of your distro or by using the command pip (recomended).
@@ -45,10 +45,11 @@ e.g.,
 ```
 pip install numpy scipy soundfile matplotlib
 ```
+2. Download MagPhase: ```git clone https://github.com/CSTR-Edinburgh/magphase.git```
 
-2. If you have SPTK and REAPER already installed in your system (e.g. in a Merlin installation), edit the **config.ini** file providing the paths for **reaper** and the SPTK's **mcep** binaries. Otherwise, download and compile SPTK and REAPER by:
+3. Download and compile SPTK and REAPER by:
 ```
-cd tools
+cd magphase/tools
 ./download_and_compile_tools.sh
 ```
 This will compile and configure SPTK and REAPER automatically for you...and that's it!
@@ -70,6 +71,7 @@ We provide two demos distributed with the Merlin's official distribution. These 
 
 * Voice conversion: [Merlin's voice conversion demo](https://github.com/CSTR-Edinburgh/merlin/tree/master/egs/voice_conversion/s2) (roughly tested)
 
+* Build voice using your own data: (**TODO**)
 
 ## VIII. Colaboration:
 We need help to improve this software. You can colaborate by:
