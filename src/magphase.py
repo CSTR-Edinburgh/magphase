@@ -458,19 +458,18 @@ def compute_lossless_feats(m_fft, v_shift, v_voi, fs):
 
     m_mag  = np.absolute(m_fft) 
 
-    # Debug:
-    #m_mag[:10,:10] = 0.0
+    # Protection against division by zero:
+    mb_mag_zeros = (m_mag==0.0)
+    m_div = m_mag.copy()
+    m_div[mb_mag_zeros] = 1.0
 
-    warnings.filterwarnings('ignore', 'divide\ by\ zero')
-    m_real = m_fft.real / m_mag # = p_phc
-    m_imag = m_fft.imag / m_mag # = p_phs
-    warnings.filterwarnings('default', 'divide\ by\ zero')
+    m_real = m_fft.real / m_div
+    m_imag = m_fft.imag / m_div
 
-    # Protection against division by zero.
-    m_real[np.abs(m_real)==np.inf] = 0.0
-    m_imag[np.abs(m_imag)==np.inf] = 0.0
-    m_real[np.isnan(m_real)] = 0.0
-    m_imag[np.isnan(m_imag)] = 0.0
+    # Protection against division by zero (may be not necessary):
+    m_real[mb_mag_zeros] = 0.0
+    m_imag[mb_mag_zeros] = 0.0
+
 
     v_f0 = shift_to_f0(v_shift, v_voi, fs, out='f0', b_smooth=False)
 
