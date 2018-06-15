@@ -59,7 +59,7 @@ if __name__ == '__main__':
 
     # INPUT:==============================================================================
     wav_file_orig = 'data_48k/wavs_nat/hvd_593.wav' # Original natural wave file. You can choose anyone provided in the /wavs_nat directory.
-    b_const_rate  = True
+    b_const_rate  = False
     mag_dim       = 100
     phase_dim     = 45
 
