@@ -436,9 +436,14 @@ def read_reaper_est_file(est_file, check_len_smpls=-1, fs=-1, skiprows=7, usecol
     v_voi = v_voi[vb_correct]
 
     # Protection against REAPER bugs 2 (maybe it needs a better protection):
-    if (check_len_smpls > 0) and ( (v_pm_sec[-1] * fs) >= (check_len_smpls-1) ):
-        v_pm_sec  = v_pm_sec[:-1]
-        v_voi = v_voi[:-1]
+    if (check_len_smpls > 0):
+        v_pm_smpls = lu.round_to_int(v_pm_sec * fs)
+        if ( v_pm_smpls[-1] >= (check_len_smpls-1) ):
+            vb_correct_2 = v_pm_smpls < (check_len_smpls-1)
+            v_pm_smpls = v_pm_smpls[vb_correct_2]
+            v_pm_sec   = v_pm_sec[vb_correct_2]
+            v_voi      = v_voi[vb_correct_2]
+
     return v_pm_sec, v_voi
 
 # REAPER wrapper:--------------------------------------------------------------
